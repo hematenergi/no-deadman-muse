@@ -1,0 +1,11 @@
+{
+  "name": "no-deadman-muse",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "A deterministic, file-backed agent run supervisor",
+  "engines": { "node": ">=20" },
+  "bin": { "ndm": "bin/ndm.mjs" },
+  "scripts": { "test": "node --test test/*.test.mjs", "inject-failures": "node scripts/inject-failures.mjs" },
+  "license": "MIT"
+}
