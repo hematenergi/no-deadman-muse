@@ -1,8 +1,6 @@
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/lockup-dark.png">
-    <img alt="NoDeadman Muse" src="assets/lockup-light.png" width="520">
-  </picture>
+  <img alt="NoDeadman Muse" src="assets/lockup-light.png#gh-light-mode-only" width="520">
+  <img alt="NoDeadman Muse" src="assets/lockup-dark.png#gh-dark-mode-only" width="520">
 </p>
 
 **No agent run dies silently.**
