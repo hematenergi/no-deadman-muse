@@ -139,6 +139,34 @@ NoDeadman separates the two jobs:
 4. **Alarm without the orchestrator.** Incidents go to a persistent, deduplicated file outbox and optionally a webhook (one best-effort POST, 5 s timeout, no automatic retry). Unacknowledged incidents escalate once on a sweep after 120 s by default. External delivery and host-loss detection are not guaranteed by v1; the pilot targets below remain predictions.
 5. **Evidence or it didn't happen.** The success path is `registered → starting → running → awaiting_review → completed`; any active state can instead become `failed`, `blocked`, or `timed_out`. `completed` requires an explicit `complete` and all declared acceptance checks; supply both artifact and gate for evidence-based completion. An exit code of 0 is only proof the process ended.
 
+## Reference deployment
+
+NoDeadman is host-agnostic. A deployment is four pieces on infrastructure you already have: an always-on host, a watcher, a shared launcher, and state plus alarms. There is no server to rent, no database, and no account.
+
+```text
+agents / run owners -> one shared launcher
+                                |
+                                v
+              registry (state dir) <- watcher
+                                        |
+                                        v
+                         alarms (file, optional webhook)
+```
+
+**One always-on host.** Any machine that stays on and can run Node 20+ will do: a mini PC, a spare laptop, or a small VPS. The watcher and the state directory live here. If the host dies, recorded runs remain in the state directory and unresolved failures surface as incidents when it returns and the watcher resumes, provided the state files survive. The host cannot alarm while it is down; power-loss durability is not guaranteed (see [remaining limits](REPORT.md#remaining-gaps-and-limitations)).
+
+**The watcher as a daemon.** `ndm watch` is the only long-running supervisor process. Run it under whatever supervisor you already use (pm2, systemd, or launchd) so it restarts on boot or crash. Run exactly one watcher per state directory.
+
+**A shared launcher.** Every agent or run owner must use one small wrapper script that registers the run before spawning it. This is the only sanctioned launch path; [Use case 5](#5-make-it-the-standard-one-launcher-every-agent-must-use) describes the contract.
+
+**State + alarms.** The state directory is plain files; back it up like any folder. Alarms land in `alarms.jsonl` and optionally go to a webhook. Assign a person or service to read the alarms, investigate incidents, and acknowledge them after handling them. Writing an alarm does not mean someone has acted on it.
+
+**What you do not need**
+
+- Public exposure of the registry.
+- A message broker.
+- A second machine for v1. A cross-host watchdog is future work.
+
 ## Use cases
 
 ### 1. A coding agent launched on a long task
