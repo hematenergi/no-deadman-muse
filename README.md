@@ -71,6 +71,8 @@ node scripts/inject-failures.mjs
 ```
 
 
+> **Handing this repo to an AI agent?** It ships [SKILL.md](SKILL.md) — an agent skill that teaches the register, run, and gate workflow, so an agent that opens this repo can adopt the supervision pattern on its own.
+
 ## The problem
 
 Multi-agent setups fail quietly. An orchestrator launches a coding run with a wrong brief path; the process exits in the first second; the dashboard still says "running"; the human finds out two hours later by asking. The orchestrator's attention is not a monitoring system — and a smarter model does not fix a process nobody checks.
