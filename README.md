@@ -7,7 +7,69 @@
 
 A deterministic run supervisor for Muse agents. It registers every agent run before it starts, preflights its brief, watches for start confirmation, exit, and heartbeat, and raises an alarm within seconds when a run dies, stalls, or never started — with evidence, not claims.
 
-> Status: **v1 implemented; pilot pending.** The design and the pre-registered pilot predictions below are public from day one; the numbers will follow the pilot, pass or fail. See [REPORT.md](REPORT.md) for implementation checks and remaining limits.
+> Status: **v1 implemented; 14-day pilot running (started 13 Nov 2026).** The design and the pre-registered pilot predictions below are public from day one; the numbers will follow the pilot, pass or fail. See [REPORT.md](REPORT.md) for implementation checks and remaining limits.
+
+## Quickstart (5 minutes)
+
+NoDeadman has no install step: clone it and run the CLI straight from the checkout. You need Node.js 20 or newer.
+
+```sh
+git clone https://github.com/hematenergi/no-deadman-muse.git
+cd no-deadman-muse
+```
+
+**1. Start the watcher.** This is the supervisor — run it in a separate terminal, under whatever process manager you already use:
+
+```sh
+node bin/ndm.mjs watch
+```
+
+**2. Write a brief** for the run you are about to launch. One paragraph is enough; the point is that the run's intent exists as a file the preflight can check before anything spawns:
+
+```sh
+cat > brief.md <<'EOF'
+# Nightly report job
+Generate tonight's report into result.txt. Done when result.txt exists and is non-empty.
+EOF
+```
+
+**3. Register the run — before launching it.** Registration records the owner, the brief, the working directory, a deadline, the artifact that will prove success, and a gate command that checks that artifact:
+
+```sh
+node bin/ndm.mjs register --owner you --brief ./brief.md --cwd . --deadline 300 \
+  --artifact ./result.txt --gate-cmd 'test -s result.txt' \
+  -- node -e 'require("fs").writeFileSync("result.txt", "report body")'
+```
+
+Registration prints the run's ID. If the brief is missing or the working directory is wrong, the run is rejected here — before it can die silently.
+
+**4. Launch it through the wrapper** (never directly — the wrapper is what records start confirmation, heartbeat, and exit):
+
+```sh
+node bin/ndm.mjs run <RUN_ID>
+node bin/ndm.mjs status <RUN_ID>   # -> awaiting_review once the process exits 0
+```
+
+**5. Complete it.** `completed` does not mean "the process ended". The artifact must exist and the gate must pass:
+
+```sh
+node bin/ndm.mjs complete <RUN_ID>
+```
+
+**Now watch it catch a death.** Register the same brief with a command that fails:
+
+```sh
+node bin/ndm.mjs register --owner you --brief ./brief.md --cwd . --deadline 300 \
+  -- node -e 'process.exit(1)'
+node bin/ndm.mjs run <RUN_ID>
+```
+
+Within seconds the watcher records an incident — see it in `.ndm/alarms.jsonl` and in `node bin/ndm.mjs list`. Nobody had to notice, remember, or ask. To see every failure class at once (fail-to-start, mid-run exit, heartbeat stall, deadline), run the injection suite and read the measured detection latencies:
+
+```sh
+node scripts/inject-failures.mjs
+```
+
 
 ## The problem
 
@@ -25,6 +87,52 @@ NoDeadman separates the two jobs:
 3. **Supervise.** A watcher independent of the orchestrator's chat checks every 10 seconds: start confirmation (≤15 s), process exit and status, heartbeat (stale after 45 s), progress milestones, and deadlines.
 4. **Alarm without the orchestrator.** Incidents go to a persistent, deduplicated queue and out to the configured channel within ≤30 s of detection for local exits. Escalation if unacknowledged in 2 minutes.
 5. **Evidence or it didn't happen.** Status transitions are `registered → starting → running → awaiting_review → completed | failed | blocked | timed_out`. `completed` requires the artifact and its gate — an exit code of 0 is only proof the process ended.
+
+## Use cases
+
+### 1. A coding agent launched on a long task
+
+You hand a coding agent a brief and a two-hour deadline, then go do something else. Register first, with the agent's report file as the artifact and a gate that checks it exists:
+
+```sh
+node bin/ndm.mjs register --owner orchestrator \
+  --brief ./runs/REFAC-123/BRIEF.md --cwd ./runs/REFAC-123 --deadline 7200 \
+  --artifact ./REPORT.md --gate-cmd 'test -s REPORT.md' \
+  -- your-agent-command --brief ./runs/REFAC-123/BRIEF.md
+node bin/ndm.mjs run <RUN_ID>
+```
+
+If the launcher resolves the brief path wrong and the agent exits in the first second — a real failure this tool was built after — you get an alarm in seconds, not a dashboard still saying "running" and a discovery two hours later.
+
+### 2. An overnight batch job you cannot babysit
+
+A pipeline, backup, or data job started by cron or systemd can report its own liveness. Register it, start it as an external process, and have the job heartbeat as it works:
+
+```sh
+node bin/ndm.mjs start <RUN_ID> --pid $!
+# inside the job's main loop:
+node bin/ndm.mjs heartbeat <RUN_ID>
+node bin/ndm.mjs progress <RUN_ID>
+```
+
+If the job wedges — process technically alive, no heartbeat, no progress — the run is marked *unobserved* and alarmed. A stall is not hidden behind a live PID.
+
+### 3. "Exit 0" is not "it worked"
+
+Release and migration scripts routinely exit 0 while producing nothing. Make completion depend on the evidence instead:
+
+```sh
+node bin/ndm.mjs register --owner release --brief ./RELEASE.md --cwd . --deadline 1800 \
+  --artifact ./dist/bundle.zip --gate-cmd 'test -s dist/bundle.zip' \
+  -- ./scripts/release.sh
+```
+
+The run waits in `awaiting_review` until `complete` runs the gate. A green exit code alone never closes a run.
+
+### 4. One registry for a whole fleet
+
+Several agents — or several teammates — register into the same state directory, and one watcher supervises all of them. `list` and `status` print JSON; incidents queue in `incidents.jsonl` until they are `ack`ed; an optional webhook pushes alarms to your channel. The supervisor does not care which agent launched a run — only that it was registered, that it started, and that it either produced its artifact or raised an alarm.
+
 
 ## Pre-registered pilot predictions
 
