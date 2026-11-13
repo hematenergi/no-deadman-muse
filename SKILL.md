@@ -1,6 +1,6 @@
 ---
 name: supervise-runs-nodeadman
-description: Supervise delegated or long-running runs (coding agents, builds, batch jobs) with NoDeadman Muse so no run dies silently. Use whenever you launch a run you will not watch continuously, hand work to another agent or process, or report a run's status: register the run before spawn, launch it through the ndm wrapper, verify start from evidence, and complete it only through its artifact gate.
+description: "Supervise delegated or long-running runs (coding agents, builds, batch jobs) with NoDeadman Muse so no run dies silently. Use whenever you launch a run you will not watch continuously, hand work to another agent or process, or report a run's status: register the run before spawn, launch it through the ndm wrapper, verify start from evidence, and complete it only through its artifact gate."
 ---
 
 # Supervise runs with NoDeadman Muse
