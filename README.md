@@ -1,9 +1,9 @@
 <p align="center">
   <img alt="NoDeadman Muse" src="assets/lockup-light.png#gh-light-mode-only" width="520">
   <img alt="NoDeadman Muse" src="assets/lockup-dark.png#gh-dark-mode-only" width="520">
+  <br>
+  <strong>No agent run dies silently.</strong>
 </p>
-
-**No agent run dies silently.**
 
 A deterministic run supervisor for Muse agents. It registers every agent run before it starts, preflights its brief, watches for start confirmation, exit, and heartbeat, and raises an alarm within seconds when a run dies, stalls, or never started — with evidence, not claims.
 
