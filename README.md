@@ -4,7 +4,7 @@
 
 A deterministic run supervisor for Muse agents. It registers every agent run before it starts, preflights its brief, watches for start confirmation, exit, and heartbeat, and raises an alarm within seconds when a run dies, stalls, or never started — with evidence, not claims.
 
-> Status: **v1 under construction.** The design and the pre-registered pilot predictions below are public from day one; the numbers will follow the pilot, pass or fail.
+> Status: **v1 implemented; pilot pending.** The design and the pre-registered pilot predictions below are public from day one; the numbers will follow the pilot, pass or fail. See [REPORT.md](REPORT.md) for implementation checks and remaining limits.
 
 ## The problem
 
@@ -43,10 +43,50 @@ Frozen before the pilot starts (14 days of operation after the supervisor passes
 - **Honest states.** A run that cannot be observed is reported as *unobserved*, never as fine. Missing data is shown as missing, not as zero.
 - **Safe retries only.** Operations that can duplicate external effects are never retried blindly; they stop for a human/agent decision.
 
+## Running v1
+
+Requires Node.js >=20; there are no runtime dependencies or install steps. The package exposes the `ndm` bin; from a checkout, use `node bin/ndm.mjs`:
+
+```sh
+npm test
+node scripts/inject-failures.mjs
+
+node bin/ndm.mjs register --owner example --brief ./brief.md --cwd . --deadline 300 --artifact ./result.txt --gate-cmd 'test -s result.txt' -- node -e 'require("fs").writeFileSync("result.txt", "result")'
+# Use the printed ID in the following commands:
+node bin/ndm.mjs run RUN_ID
+node bin/ndm.mjs status RUN_ID
+node bin/ndm.mjs complete RUN_ID
+```
+
+Run `node bin/ndm.mjs watch` in a separate, independently managed process. It sweeps immediately and then on the configured interval; `sweep` performs one pass. `watch` stops on SIGINT/SIGTERM. `list` and `status` print JSON. A stale heartbeat sets `observation: "unobserved"` while preserving `running`; an observed missing wrapper/process fails the run. Deadlines mark `timed_out` without killing processes.
+
+Externally launched processes use `start RUN_ID --pid PID`, followed by `heartbeat RUN_ID` and `progress RUN_ID`. The caller must provide these signals; wrapper heartbeats are automatic, but meaningful progress is always explicit. External process disappearance is a failure because no successful exit was observed. `ack INCIDENT_ID` acknowledges an incident; unacknowledged incidents escalate once, even if their run is already terminal.
+
+Optional `ndm.config.json` is read from the invocation directory. All fields below are optional; these are the defaults:
+
+```json
+{
+  "stateDir": "./.ndm",
+  "sweepSeconds": 10,
+  "heartbeatSeconds": 10,
+  "startConfirmSeconds": 15,
+  "heartbeatStaleSeconds": 45,
+  "escalateAfterSeconds": 120,
+  "alarmWebhook": null,
+  "profiles": { "default": { "noProgressSeconds": null } }
+}
+```
+
+Define additional profiles under `profiles`, then select one with `register --profile NAME`. Progress checks apply while running; heartbeat checks stop when the process exits into review. Deadlines still apply during review. `stateDir`, brief and working-directory paths resolve from the invocation directory; relative artifact paths resolve from the run's working directory. Use the same config directory for every command supervising a registry. Commands are argv arrays; only the explicitly supplied `gate_cmd` uses a shell.
+
+`runs.json` is atomically replaced under a transaction lock. `events.jsonl` contains timestamped evidence and run snapshots; `incidents.jsonl` is the persistent incident/ack queue. `alarms.jsonl` is the file alarm sink, deduplicated by incident ID. Optional webhook delivery makes one bounded POST attempt per incident and records success/failure. Ambiguous failures are not retried automatically. A missing artifact can be supplied and `complete` explicitly retried; gates should be checks without external side effects.
+
+If a process is forcibly killed during a state transaction, an abandoned `.ndm/.lock` can remain. Confirm that the PID in `.lock/pid` and all writers are stopped before manually removing that directory. A gate interrupted while executing similarly leaves `gate_attempt` evidence for operator review. These cases are not automatically retried. See the report for durability, transport and pilot limits.
+
 ## Origin
 
 Built by a one-person multi-agent fleet after its orchestrator missed a dead run for two hours — and the human became the alarm. The fix is deliberately boring: a registry, a preflight, a watcher, an alarm. The interesting part is whether the numbers above hold.
 
 ## License
 
-MIT (to be added with v1).
+[MIT](LICENSE).
