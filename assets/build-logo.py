@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 """
-NoDeadman Muse — FINAL logo generator: Lentera Penjaga (Minji, 13 Nov 2026).
-Direction chosen by Dany 13 Nov (sketch round 4, direction 1); his one
-correction: the lantern shape must be RAPI (tidy). This build answers it
-with construction discipline:
+NoDeadman Muse — logo generator: Lentera Penjaga.
+The lantern is symmetric by construction:
   - every coordinate derives from ONE centre axis (cx=60); the right
     half of every curve is the arithmetic mirror of the left half;
   - one stroke weight (6) for ring + chamber frame;
@@ -21,10 +19,26 @@ Outputs: mark.svg/.png (ink), mark-dark.svg/.png (paper), lockup-light,
 lockup-dark (SVG+PNG >=1600w), context-readme-light/dark (520px),
 proof-sheet.png. Deterministic; fonts via fontTools glyph paths.
 """
+import argparse
+import os
+import shutil
+
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("--serif-font", required=True, help="path to NotoSerifDisplay-Black.ttf")
+parser.add_argument("--tag-font", required=True, help="path to Inter-Regular.ttf")
+parser.add_argument("--resvg", default="resvg", help="resvg executable (default: PATH)")
+args = parser.parse_args()
+for font in (args.serif_font, args.tag_font):
+    if not os.path.isfile(font):
+        parser.error(f"font file not found: {font}")
+renderer = shutil.which(args.resvg)
+if renderer is None:
+    parser.error(f"resvg executable not found: {args.resvg}")
+
 from fontTools.ttLib import TTFont
 from fontTools.pens.svgPathPen import SVGPathPen
 from PIL import Image, ImageDraw, ImageFont
-import os
+import numpy as np
 
 OUT = os.path.dirname(os.path.abspath(__file__))
 INK = "#11181D"
@@ -69,7 +83,7 @@ for name, struct in [("mark", INK), ("mark-dark", PAPER)]:
     open(os.path.join(OUT, f"{name}.svg"), "w").write(doc)
 
 # ---------------- wordmark ----------------
-F_SERIF = "/usr/share/fonts/truetype/noto/NotoSerifDisplay-Black.ttf"
+F_SERIF = args.serif_font
 NAME = "NoDeadman Muse"
 
 EM = 116.0
@@ -84,8 +98,7 @@ _NUM = re.compile(r"[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?")
 
 def clean_numbers(d):
     """Rewrite every number in a path string as a plain decimal (2dp).
-    fontTools can emit exponent notation (1e-05) which strict SVG path
-    parsers (resvg) misread - that once blew the wordmark into a blob."""
+    Keep path numbers consistent across SVG renderers."""
     def rep(m):
         v = float(m.group(0))
         s = f"{v:.2f}".rstrip("0").rstrip(".")
@@ -131,16 +144,13 @@ print(f"lockup viewBox: {TOTAL_W:.0f} x {TOTAL_H:.0f}")
 
 # ---------------- PNG rendering: TRUE VECTOR via resvg ----------------
 # PNGs are rasterized from the SVG masters by resvg (real vector
-# rasterizer) - never by sampling curves into polygons (the first final's
-# "patah-patah" mistake, Dany 13 Nov: "jangan raster"), and never via
-# ffmpeg's SVG path (it silently upscales a 100px raster - fringed junk).
+# rasterizer), never by sampling curves into polygons or upscaling a
+# low-resolution intermediate raster.
 # Rendered at 2x, downscaled once with LANCZOS.
 import subprocess
 
-RENDER_MJS = os.path.expanduser("~/workspace/minji/tools-resvg/render.mjs")
-
 def render_svg(svg_path, out_png, width_px):
-    subprocess.run(["node", RENDER_MJS, svg_path, out_png, str(width_px)], check=True)
+    subprocess.run([renderer, "--width", str(width_px), svg_path, out_png], check=True)
     return Image.open(out_png)
 
 def render_final(svg_name, png_name, width_px, downscale_to=None):
@@ -155,7 +165,6 @@ mk_light = render_final("mark.svg", "mark.png", 2048, downscale_to=1024)
 render_final("mark-dark.svg", "mark-dark.png", 2048, downscale_to=1024)
 
 # mirror-symmetry verification on the ink mark
-import numpy as np
 a = np.asarray(mk_light).astype(int)
 d = np.abs(a - a[:, ::-1]).sum(axis=2)
 print(f"mirror check: {(d > 0).mean() * 100:.3f}% pixels differ (antialiased curve edges only), mean delta {d.mean():.3f}")
@@ -164,7 +173,7 @@ ll = render_final("lockup-light.svg", "lockup-light.png", 4400, downscale_to=220
 ld = render_final("lockup-dark.svg", "lockup-dark.png", 4400, downscale_to=2200)
 
 # ---------------- context renders: exact 520px in a README header sim ----------------
-F_TAG = os.path.expanduser("~/.fonts/inter/Inter-Regular.ttf")
+F_TAG = args.tag_font
 def context_render(lockup, bg, path):
     im = Image.new("RGB", (920, 300), bg)
     d = ImageDraw.Draw(im)

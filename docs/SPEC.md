@@ -1,6 +1,6 @@
 # SPEC v1 — NoDeadman Muse
 
-Build target: a working, tested v1 of the deterministic run supervisor described in README.md. Node.js (>= 20), **zero runtime dependencies**, plain files for state. Everything generic via config; no fleet-specific names anywhere in code.
+Build target: a working, tested v1 of the deterministic run supervisor described in [README.md](../README.md). Node.js (>= 20), **zero runtime dependencies**, plain files for state. Run metadata comes from CLI arguments and host settings from config; no fleet-specific names anywhere in code.
 
 ## Components
 
@@ -29,8 +29,8 @@ Before spawn, verify: brief file exists and is readable and non-empty; `cwd` exi
 A long-running loop (also runnable as `ndm sweep` for one pass, which is how tests drive it):
 - Every `sweepSeconds` (default 10): for each non-terminal run, check:
   - `starting` older than `startConfirmSeconds` (default 15) → incident `start_unconfirmed`, status stays, escalate.
-  - `running` with a pid that no longer exists and no exit recorded (wrapper died) → status `failed`, incident `wrapper_lost`.
-  - heartbeat stale beyond `heartbeatStaleSeconds` (default 45) → incident `heartbeat_stale` (state: unobserved, do not mark failed on heartbeat alone).
+  - `running` with a missing wrapper PID (when wrapped), or a missing process PID (when attached externally), and no exit recorded → status `failed`, incident `wrapper_lost`.
+  - heartbeat stale beyond `heartbeatStaleSeconds` (default 45) → incident `heartbeat_stale` (`observation: "unobserved"`, preserve `status: "running"`, do not mark failed on heartbeat alone).
   - now past `created_at + deadline_seconds` and not terminal → status `timed_out`, incident `deadline_exceeded`.
   - no progress beyond the profile's `noProgressSeconds` (when set) → incident `no_progress`.
 - Incidents are appended to `incidents.jsonl` in the state dir **and** delivered to alarm sinks: a file outbox (`alarms.jsonl`, append, deduplicated by `incident_id`) plus an optional webhook (`alarmWebhook` in config, POST JSON, best effort, failure recorded as an event, never thrown).
@@ -46,7 +46,7 @@ A long-running loop (also runnable as `ndm sweep` for one pass, which is how tes
 - `npm test` green and the injection script exits 0.
 
 ## Out of scope for v1
-Cross-host watchdog, dashboards/UI, retry of child processes, LLM anything, npm publishing. Those come after the 14-day pilot (see README predictions P1–P6).
+Cross-host watchdog, dashboards/UI, retry of child processes, LLM anything, npm publishing. Those come after the 14-day pilot (see [README predictions P1–P6](../README.md#pre-registered-pilot-predictions)).
 
 ## Report
 Write `REPORT.md` in the repo root when done: what was built per component, exact test commands and their results, measured injection latencies, and honest remaining gaps.

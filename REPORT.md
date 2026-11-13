@@ -20,14 +20,14 @@ Race nyata ditemukan dan diperbaiki: watcher semula dapat melihat child sudah ma
 
 ## Perintah verifikasi dan hasil
 
-Sesuai instruksi RTK lokal, perintah shell dijalankan melalui `rtk`; command sebenarnya tercantum di kolom kedua.
+Tabel ini merekam verifikasi implementasi awal, bukan hasil pilot. Perintah di bawah dapat dijalankan langsung dari root checkout, tanpa wrapper shell tambahan. Hasil koreksi dokumentasi dan uji adaptabilitas berikutnya ada di [ADAPTABILITY-REVIEW.md](ADAPTABILITY-REVIEW.md).
 
-| Perintah yang dijalankan | Command sebenarnya | Hasil |
-|---|---|---|
-| `rtk npm test` | `npm test` → `node --test test/*.test.mjs` | **Exit 0: 30 tests, 30 pass, 0 fail, 0 skipped**, durasi terakhir 3716.449375 ms. |
-| `rtk proxy node scripts/inject-failures.mjs` | `node scripts/inject-failures.mjs` | **Exit 0**, `result: PASS`, seluruh empat skenario di bawah lolos. |
-| `rtk proxy ./bin/ndm.mjs --help` | `./bin/ndm.mjs --help` | **Exit 0**, shebang/executable dan daftar perintah berfungsi. |
-| `rtk git diff --check` | `git diff --check` | **Exit 0**, tidak ada masalah whitespace pada diff tracked. |
+| Perintah | Hasil |
+|---|---|
+| `npm test` → `node --test test/*.test.mjs` | **Exit 0: 30 tests, 30 pass, 0 fail, 0 skipped**, durasi terakhir 3716.449375 ms. |
+| `node scripts/inject-failures.mjs` | **Exit 0**, `result: PASS`, seluruh empat skenario di bawah lolos. |
+| `./bin/ndm.mjs --help` | **Exit 0**, shebang/executable dan daftar perintah berfungsi. |
+| `git diff --check` | **Exit 0**, tidak ada masalah whitespace pada diff tracked. |
 
 Selain Definition of Done, suite memverifikasi heartbeat otomatis, signal termination, spawn error setelah preflight berhasil, preflight ulang, status/list JSON, validasi CLI/config, progress dengan heartbeat segar, heartbeat recovery dan insiden berulang, ack/eskalasi, pemulihan outbox, deduplikasi pengiriman bersamaan, wrapper hilang, dan timeout selama run.
 
@@ -54,6 +54,6 @@ Heartbeat stale threshold dan deadline injeksi sengaja dipercepat menjadi **0.1 
 4. **Gate adalah command tepercaya, tanpa batas waktu eksekusi khusus.** Deadline tetap dapat dideteksi watcher independen dan mencegah completion terlambat, tetapi tidak membunuh gate. Kill CLI saat gate berjalan meninggalkan `gate_attempt` untuk inspeksi manual; explicit retry setelah gate gagal dapat mengeksekusinya lagi. Gate sebaiknya pemeriksaan tanpa efek eksternal. Artifact/gate bersifat opsional sesuai SPEC: keduanya perlu dideklarasikan bila penerimaan run memang mensyaratkannya.
 5. **Tidak mengelola penghentian process tree, PID identity, atau daemon OS.** Deadline/wrapper loss tidak membunuh child; pekerjaan atau efek eksternal dapat terus berjalan. PID reuse dan zombie process belum diatasi. `watch` harus dijalankan terpisah dan dijaga hidup oleh operator/service manager; satu host yang mati tidak bisa mengalarm dirinya sendiri.
 6. **Skala dan platform belum dipilotkan.** Semua file dibaca secara linear dan riwayat tidak dirotasi. Tidak ada pengujian load jangka panjang, filesystem jaringan, disk penuh, restart host, Windows, maupun runtime Node 20/22 secara langsung; verifikasi dilakukan pada Node 26.8.2 macOS. Hanya API bawaan yang tersedia sejak Node 20 digunakan.
-7. **P1–P6 belum dinilai.** Belum ada pilot 14 hari, baseline beban supervisi, >=40 peluncuran operasional, >=20 fault samples, pengukuran false alarm/triage, atau penilaian mutu artifact. Gate lulus dan proses hijau tidak menggantikan review manusia/agent.
+7. **P1–P6 belum dinilai.** Pilot 14 hari yang dinyatakan berjalan di README belum selesai/dinilai; belum ada hasil baseline beban supervisi, >=40 peluncuran operasional, >=20 fault samples, pengukuran false alarm/triage, atau penilaian mutu artifact. Gate lulus dan proses hijau tidak menggantikan review manusia/agent.
 
 Dashboard, retry child, LLM, npm publishing dan cross-host watchdog tetap tidak dibangun, sesuai out-of-scope v1. Perubahan siap diperiksa supervisor; tidak ada commit/push.
