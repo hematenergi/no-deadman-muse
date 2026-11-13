@@ -186,6 +186,18 @@ The run waits in `awaiting_review` until `complete` runs the gate. A green exit 
 
 Several agents — or several teammates — on one host can register into the same local state directory, and one watcher supervises those runs. Use a separate registry and watcher per host; cross-host monitoring is outside v1. `list` and `status` print JSON; incidents and acknowledgements append to `incidents.jsonl` (acknowledgement does not delete history); an optional webhook pushes alarms to your channel. The supervisor does not care which agent launched a run — only that it was registered, that it started, and that it either produced its artifact or raised an alarm.
 
+### 5. Make it the standard: one launcher every agent must use
+
+A registry only protects the runs that go through it, so the pattern that scales from one careful operator to a fleet is a single shared launcher: one small wrapper script that every agent (or teammate) uses to start work. The wrapper registers the run, captures the printed run ID, launches through `ndm run`, and refuses to start when the owner is not named explicitly — a run is never silently attributed to the wrong owner. Owners differ per launch (`alice`, `build-agent`, `nightly`); the registry, the watcher, and the completion discipline stay identical for everyone.
+
+Rules that make it a standard rather than a suggestion:
+
+- The launcher is the only sanctioned way to start the agent or runtime; a direct background launch is unsupervised by definition and treated as a process bug, not a shortcut.
+- Every launch declares its artifact up front, and the launcher prints the run ID — the ID goes into the operator's report, so any status claim can be traced back to the registry.
+- Runs close through `ndm complete` after the artifact has been checked, never on the launching agent's say-so.
+
+This is the difference between a tool one operator remembers to use and a property of the fleet: the standard exists for the first unregistered launch that would otherwise die silently.
+
 
 ## Pre-registered pilot predictions
 
@@ -209,22 +221,14 @@ Frozen before the pilot starts (14 days of operation after the supervisor passes
 
 ## Running v1
 
-Requires Node.js >=20; there are no runtime dependencies or install steps. The package exposes the `ndm` bin; from a checkout, use `node bin/ndm.mjs`:
+Requires Node.js >=20; there are no runtime dependencies or install steps. The package exposes the `ndm` bin; from a checkout, use `node bin/ndm.mjs`. Verify an install with the test suite and the failure-injection suite:
 
 ```sh
 npm test
 node scripts/inject-failures.mjs
-
-# Reuse brief.md from Quickstart, or write a non-empty brief first.
-RUN_ID=$(node bin/ndm.mjs register --owner example --brief ./brief.md --cwd . --deadline 300 --artifact ./result.txt --gate-cmd 'test -s result.txt' -- node -e 'require("fs").writeFileSync("result.txt", "result")')
-node bin/ndm.mjs run "$RUN_ID"
-node bin/ndm.mjs status "$RUN_ID"
-node bin/ndm.mjs complete "$RUN_ID"
 ```
 
-Run `node bin/ndm.mjs watch` in a separate, independently managed process. It sweeps immediately and then waits the configured interval after each pass; `sweep` performs one pass. `watch` stops on SIGINT/SIGTERM. `list` and `status` print JSON. A stale heartbeat sets `observation: "unobserved"` while preserving `running`; an observed missing wrapper/process fails the run. Deadlines mark `timed_out` without killing processes.
-
-Externally launched processes use `start RUN_ID --pid PID`, followed by `heartbeat RUN_ID` and `progress RUN_ID`. The caller must provide these signals; wrapper heartbeats are automatic, but meaningful progress is always explicit. External process disappearance is a failure because no successful exit was observed. `ack INCIDENT_ID` acknowledges an incident; unacknowledged incidents escalate once, even if their run is already terminal.
+Run `node bin/ndm.mjs watch` in a separate, independently managed process (see Quickstart). It sweeps immediately and then waits the configured interval after each pass; `sweep` performs one pass. A stale heartbeat sets `observation: "unobserved"` while preserving `running`; deadlines mark `timed_out` without killing processes. Externally launched processes attach with `start RUN_ID --pid PID` plus explicit `heartbeat`/`progress` calls, as in Use case 2.
 
 Optional `ndm.config.json` (not shipped or required) is read from the invocation directory. All fields below are optional; these are the defaults:
 
@@ -241,11 +245,9 @@ Optional `ndm.config.json` (not shipped or required) is read from the invocation
 }
 ```
 
-Define additional profiles under `profiles`, then select one with `register --profile NAME`. Progress checks apply while running; heartbeat checks stop when the process exits into review. Deadlines still apply during review. `stateDir`, brief and working-directory paths resolve from the invocation directory; relative artifact paths resolve from the run's working directory. Use the same config directory for every command supervising a registry. Commands are argv arrays; only the explicitly supplied `gate_cmd` uses a shell.
+Define additional profiles under `profiles`, then select one with `register --profile NAME`. `stateDir`, brief, and working-directory paths resolve from the invocation directory; relative artifact paths resolve from the run's working directory — use the same config directory for every command supervising a registry. State lives in `runs.json` plus append-only `events.jsonl`, `incidents.jsonl`, and `alarms.jsonl` in the state directory.
 
-`runs.json` is atomically replaced under a transaction lock. `events.jsonl` contains timestamped evidence and run snapshots; `incidents.jsonl` is the persistent incident/ack queue. `alarms.jsonl` is the file alarm sink, deduplicated by incident ID. Optional webhook delivery makes one bounded POST attempt per incident and records success/failure. Ambiguous failures are not retried automatically. A missing artifact can be supplied and `complete` explicitly retried; gates should be checks without external side effects.
-
-If a process is forcibly killed during a state transaction, an abandoned `.ndm/.lock` can remain. Confirm that the PID in `.lock/pid` and all writers are stopped before manually removing that directory. A gate interrupted while executing similarly leaves `gate_attempt` evidence for operator review. These cases are not automatically retried. See [REPORT.md](REPORT.md) for durability, transport and pilot limits, and [docs/SPEC.md](docs/SPEC.md) for the v1 contract. State includes briefs' paths, command arguments, and captured output; use a trusted local directory with access limited to intended operators, and keep secrets out of argv/logs. This is a trusted-operator tool, not isolation between untrusted tenants.
+Durability limits, lock recovery, webhook delivery semantics, and the full v1 contract live in [REPORT.md](REPORT.md) and [docs/SPEC.md](docs/SPEC.md). One operational warning belongs here: state includes brief paths, command arguments, and captured output — keep the state directory on trusted local storage with access limited to intended operators, and keep secrets out of argv and logs. This is a trusted-operator tool, not isolation between untrusted tenants.
 
 ## Origin
 
