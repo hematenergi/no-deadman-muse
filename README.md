@@ -71,7 +71,56 @@ node scripts/inject-failures.mjs
 ```
 
 
-> **Handing this repo to an AI agent?** It ships [SKILL.md](SKILL.md) — an agent skill that teaches the register, run, and gate workflow, so an agent that opens this repo can adopt the supervision pattern on its own.
+## For agents: run your own work under NoDeadman
+
+If you are an AI agent reading this repo to adopt the pattern, you do not need a human to brief you further — this section is the whole protocol. (The same protocol ships as [SKILL.md](SKILL.md) in the standard Agent Skills format, for runtimes that load skills.)
+
+You are the orchestrator; NoDeadman is the machine that watches processes for you. Your judgment decides what to run and whether the result is good. It decides whether the process actually started, is still alive, exited, stalled, or produced its artifact. Never substitute your memory, or a launcher's exit message, for its records.
+
+Below, `ndm` means `node bin/ndm.mjs` from a checkout of this repo. Run every command for one registry from the same directory — the one containing `ndm.config.json` — because config and state resolve from the invocation directory.
+
+**The contract**
+
+1. **Register before spawn.** No run exists until it is registered; a process launched outside the registry is unsupervised by definition.
+2. **Launch through the wrapper.** `ndm run` records start confirmation, heartbeat, and exit. Raw `nohup`, `&`, or fire-and-forget subprocesses give you none of that evidence.
+3. **Start is proven, not assumed.** A launch command returning without error is not start evidence; only the run's status record is.
+4. **Exit 0 is not done.** The run waits in `awaiting_review`; it becomes `completed` only when `ndm complete` confirms the artifact exists and the gate passes.
+5. **Report only what the registry shows.** "Running" only while `ndm status` shows it fresh; "completed" only after `complete` succeeds. A run you cannot observe is *unobserved* — say so, never call it fine.
+
+**Setup (once per workspace)**
+
+- `ndm list` answers with the registry as JSON.
+- A watcher (`ndm watch`, under pm2/systemd/launchd or a supervised shell) must be running before the first run — without it there are no sweeps, no stall detection, no alarms.
+- Keep briefs and artifacts in one folder per run, and use absolute paths.
+
+**Launch workflow**
+
+1. Write the brief to a file first: task, working directory, expected artifact, done criteria. Record its absolute path — a relative brief path resolves against the wrong directory and the run dies in the first second.
+2. Register. The command prints the bare run ID and nothing else; capture it exactly:
+
+   ```sh
+   ndm register --owner <you> --brief <abs path> --cwd <abs dir> \
+     --deadline <seconds> --artifact <path> --gate-cmd '<check command>' \
+     -- <command...>
+   ```
+
+   Registration preflights the brief, the working directory, and the command. A rejection here is the system working — fix the cause, do not bypass it.
+3. Launch with `ndm run <RUN_ID>`; for long runs, background the wrapper under your process manager and keep its log.
+4. Verify start within ~15 seconds: `ndm status <RUN_ID>` must show `starting` → `running` with a PID. No start evidence means a dead run — read the wrapper log and `events.jsonl`, fix the cause, register a new run. Never relaunch the identical failing command a third time; escalate with the failure and the log lines.
+5. Monitor with `ndm status <RUN_ID>` / `ndm list`. Never let the human be the one who discovers a death.
+
+**Completion and failure**
+
+- On `awaiting_review`: read the artifact yourself and judge its quality — the gate proves existence, not goodness — then `ndm complete <RUN_ID>`. If the gate fails, the run stays open; fix the work, not the gate.
+- On `failed` / `blocked` / `timed_out`: read the incident in `incidents.jsonl`, the alarm in `alarms.jsonl`, and the run's trail in `events.jsonl` before deciding. Acknowledge handled incidents with `ndm ack <INCIDENT_ID>`. A retry is a new registration whose brief notes the previous run ID and what changed — never hand-edit registry state.
+- Processes that must start outside the wrapper (cron, systemd) attach instead: `ndm start <RUN_ID> --pid <PID>`, then `ndm heartbeat <RUN_ID>` and `ndm progress <RUN_ID>` from inside the job.
+
+**Anti-patterns**
+
+- Launching first and registering "once it is running" — the riskiest seconds are the first ones.
+- Reporting status from chat claims, a dashboard label, or recollection instead of `ndm status`.
+- Calling a run done because its command exited 0, its artifact was "probably" written, or its agent said so.
+- Weakening the gate to make a run pass, or killing the watcher because it is quiet. Quiet is its job working.
 
 ## The problem
 
