@@ -1,4 +1,9 @@
-# NoDeadman Muse
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/lockup-dark.png">
+    <img alt="NoDeadman Muse" src="assets/lockup-light.png" width="520">
+  </picture>
+</p>
 
 **No agent run dies silently.**
 
