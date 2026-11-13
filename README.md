@@ -5,9 +5,54 @@
   <strong>No agent run dies silently.</strong>
 </p>
 
-A deterministic run supervisor for individuals, teams, and agents. It records runs you register before launch, preflights their briefs, watches for start confirmation, exit, and heartbeat, and raises alarms with evidence. Detection timing depends on the configured thresholds and a live watcher; an unlaunched registration is caught at its deadline.
+NoDeadman Muse is a deterministic run supervisor for individuals, teams, and agents. It records runs registered before launch, preflights their briefs, watches for start confirmation, exit, and heartbeat, and raises alarms with evidence.
 
-> Status: **v1 implemented; 14-day pilot running (started 13 Nov 2026).** The design and the pre-registered pilot predictions below are public from day one; the numbers will follow the pilot, pass or fail. See [REPORT.md](REPORT.md) for implementation checks and remaining limits.
+![Tests: 30/30 passing](https://img.shields.io/badge/tests-30%2F30%20passing-brightgreen) ![License: MIT](https://img.shields.io/badge/license-MIT-blue) ![Node.js: >=20](https://img.shields.io/badge/Node.js-%3E%3D20-green)
+
+## Table of contents
+
+- [The problem](#the-problem)
+- [What it guarantees](#what-it-guarantees)
+- [See it catch a failure](#see-it-catch-a-failure)
+- [Quickstart (5 minutes)](#quickstart-5-minutes)
+- [How it works](#how-it-works)
+- [Reference deployment](#reference-deployment)
+- [Use cases](#use-cases)
+- [For agents: run your own work under NoDeadman](#for-agents-run-your-own-work-under-nodeadman)
+- [Running v1](#running-v1)
+- [Project status](#project-status)
+- [Design principles](#design-principles)
+- [Contributing](#contributing)
+- [Origin](#origin)
+- [License](#license)
+
+## The problem
+
+Multi-agent setups fail quietly. An orchestrator launches a coding run with a wrong brief path; the process exits in the first second; the dashboard still says "running"; the human finds out two hours later by asking. The orchestrator's attention is not a monitoring system — and a smarter model does not fix a process nobody checks.
+
+NoDeadman separates the two jobs:
+
+- **Machines detect.** Registration, preflight, start/exit/heartbeat watching, alarm delivery: deterministic code, no LLM in the loop.
+- **Agents judge.** Briefs, priorities, and quality verdicts stay with the orchestrator. A green process status is never presented as proof that the work is good.
+
+## What it guarantees
+
+- **Start evidence.** Registration precedes spawn; the wrapper records a PID and `started_at`. A launch command returning without error is not start confirmation.
+- **Failure detection with a live watcher.** Wrapper exit reporting is immediate. By default, the watcher sweeps immediately, then waits 10 s after each sweep; unconfirmed start and stale heartbeat thresholds are 15 s and 45 s. Threshold detection happens on the next sweep, not within a guaranteed latency. An unlaunched registration is caught at its deadline.
+- **Honest liveness.** A stale heartbeat raises an alarm and marks the run *unobserved* while preserving `running`. No-progress alarms require a configured profile; liveness does not prove useful progress.
+- **Evidence-based completion.** Exit 0 leads to `awaiting_review`, not success. Only explicit `complete` can close a run, after all declared checks pass. Declare both artifact and gate to require both; the CLI permits either or both to be omitted. Checks do not replace quality review.
+- **Persistent local alarms, limited delivery.** Incidents go to a deduplicated file outbox; the optional webhook is best effort, with no automatic retry. Periodic detection and escalation require a watcher or scheduled `sweep`; a dead host cannot alarm about itself, and cross-host monitoring is outside v1.
+- **Operational limits.** Deadlines do not kill processes. Power-loss durability is not guaranteed; lock recovery can require operator intervention. External attachment cannot reach verified completion in v1. See [REPORT.md](REPORT.md#remaining-gaps-and-limitations) for the full limits; the pilot predictions remain unassessed.
+
+## See it catch a failure
+
+A real pilot-registry alarm record, with IDs shortened (timestamp elided):
+
+```json
+{"ts":"...","run_id":"f5e4a17d-...","event":"process_failed","exit_code":1}
+```
+
+The run died in its first second; the alarm existed within the same minute. In another real run, a wrapper masked failure as exit 0, but the artifact gate refused completion.
 
 ## Quickstart (5 minutes)
 
@@ -69,67 +114,6 @@ The wrapper records and delivers a `process_failed` incident immediately after o
 ```sh
 node scripts/inject-failures.mjs
 ```
-
-
-## For agents: run your own work under NoDeadman
-
-If you are an AI agent reading this repo to adopt the pattern, you do not need a human to brief you further — this section is the whole protocol. (The same protocol ships as [SKILL.md](SKILL.md) in the standard Agent Skills format, for runtimes that load skills.)
-
-You are the operator (a person, team, or agent coordinating runs); NoDeadman is the machine that watches processes for you. Your judgment decides what to run and whether the result is good. NoDeadman records spawn, liveness signals, exit, and declared completion checks; these signals do not prove useful progress or result quality. Never substitute your memory, or a launcher's exit message, for its records.
-
-Below, `ndm` means `node bin/ndm.mjs` from a checkout of this repo. Run every command for one registry from the same directory — your chosen workspace, optionally containing `ndm.config.json` — because config and state resolve from the invocation directory. To use another workspace, invoke `node /absolute/path/to/checkout/bin/ndm.mjs` there, or define an equivalent `ndm` command in your runtime. Paths and angle-bracket fields in the templates below are examples to replace; quote substituted paths that contain spaces.
-
-**The contract**
-
-1. **Register before spawn.** No run exists until it is registered; a process launched outside the registry is unsupervised by definition.
-2. **Launch through the wrapper.** `ndm run` records start confirmation, heartbeat, and exit. Raw `nohup`, `&`, or fire-and-forget subprocesses give you none of that evidence.
-3. **Start is proven, not assumed.** A launch command returning without error is not start evidence; only the run's status record is.
-4. **Exit 0 is not done.** The run waits in `awaiting_review`; it becomes `completed` only through `ndm complete`. This adoption protocol requires both `--artifact` and `--gate-cmd`; the CLI permits either or both to be omitted and then checks only what was declared.
-5. **Report only what the registry shows.** "Running" only with start proof and a fresh `last_heartbeat_at` relative to `heartbeatStaleSeconds`; check incidents for no-progress alarms too. `status` reads stored state without sweeping, so a stale stored `running` label alone is insufficient; "completed" only after `complete` succeeds. A run you cannot observe is *unobserved* — say so, never call it fine.
-
-**Setup (once per workspace)**
-
-- `ndm list` answers with the registry as JSON.
-- Keep a watcher (`ndm watch`) running before the first run. A separate terminal suffices; pm2, systemd, and launchd are optional ways to keep it alive. Without a watcher or scheduled `sweep`, there is no periodic stall/deadline detection or escalation; register/run/complete still emit their immediate failure alarms.
-- Keep briefs and artifacts in one folder per run, and use absolute paths.
-
-**Launch workflow**
-
-1. Write the brief to a file first: task, working directory, expected artifact, done criteria. Prefer its absolute path. A relative `--brief` resolves from the CLI invocation directory; paths passed to the child command resolve from the run's `--cwd`. Preflight cannot validate brief arguments passed to another tool.
-2. Register. On valid input the command prints the bare run ID to stdout; capture it and check the exit code (preflight rejection prints an ID too):
-
-   ```sh
-   ndm register --owner <owner> --brief <absolute-brief-path> --cwd <absolute-work-dir> \
-     --deadline <seconds> --artifact <path> --gate-cmd '<check command>' \
-     -- <command...>
-   ```
-
-   Registration preflights the brief, the working directory, and the command. A rejection here is the system working — fix the cause, do not bypass it.
-3. Launch with `ndm run <RUN_ID>`; for long runs, keep the wrapper alive using your runtime or an optional process manager. Child stdout/stderr and gate output go to `<stateDir>/logs/<RUN_ID>.log`; retain wrapper stderr separately for wrapper errors.
-4. Verify start within ~15 seconds: `ndm status <RUN_ID>` must contain a PID and `started_at`, with start transitions recorded in `history`/`events.jsonl`. Short jobs may already be in `awaiting_review` or `failed`; the intermediate states need not be visible while polling. Missing start proof is an unconfirmed start — read the wrapper log and `events.jsonl`, fix the cause, register a new run. Never relaunch the identical failing command a third time; escalate with the failure and the log lines.
-5. Monitor with `ndm status <RUN_ID>` / `ndm list`. Never let the human be the one who discovers a death.
-
-**Completion and failure**
-
-- On `awaiting_review`: read the artifact yourself and judge its quality — existence and gate success prove only the declared checks — then `ndm complete <RUN_ID>`. If the gate fails, the run stays open; fix the work, not the gate.
-- On `failed` / `blocked` / `timed_out`: read the incident in `incidents.jsonl`, the alarm in `alarms.jsonl`, and the run's trail in `events.jsonl` before deciding. Acknowledge handled incidents with `ndm ack <INCIDENT_ID>`. A retry is a new registration whose brief notes the previous run ID and what changed — never hand-edit registry state.
-- Processes that must start outside the wrapper attach after registration instead: `ndm start <RUN_ID> --pid <PID>`, then `ndm heartbeat <RUN_ID>` at intervals shorter than `heartbeatStaleSeconds` and `ndm progress <RUN_ID>` at meaningful milestones, using the same registry directory. External attachment only monitors liveness: v1 has no successful-exit reporting command for these runs, so they cannot reach `awaiting_review`/`completed`. Prefer scheduling `ndm run` for jobs requiring verified completion.
-
-**Anti-patterns**
-
-- Launching first and registering "once it is running" — the riskiest seconds are the first ones.
-- Reporting status from chat claims, a dashboard label, or recollection instead of `ndm status`.
-- Calling a run done because its command exited 0, its artifact was "probably" written, or its agent said so.
-- Weakening the gate to make a run pass, or killing the watcher because it is quiet. Quiet is its job working.
-
-## The problem
-
-Multi-agent setups fail quietly. An orchestrator launches a coding run with a wrong brief path; the process exits in the first second; the dashboard still says "running"; the human finds out two hours later by asking. The orchestrator's attention is not a monitoring system — and a smarter model does not fix a process nobody checks.
-
-NoDeadman separates the two jobs:
-
-- **Machines detect.** Registration, preflight, start/exit/heartbeat watching, alarm delivery: deterministic code, no LLM in the loop.
-- **Agents judge.** Briefs, priorities, and quality verdicts stay with the orchestrator. A green process status is never presented as proof that the work is good.
 
 ## How it works
 
@@ -226,26 +210,29 @@ Rules that make it a standard rather than a suggestion:
 
 This is the difference between a tool one operator remembers to use and a property of the fleet: the standard exists for the first unregistered launch that would otherwise die silently.
 
+## For agents: run your own work under NoDeadman
 
-## Pre-registered pilot predictions
+You are the operator; NoDeadman watches processes. Your judgment decides what to run and whether the result is good. Spawn, liveness, exit, and declared checks do not prove useful progress or quality. The full protocol ships as [SKILL.md](SKILL.md) in the standard Agent Skills format; use it for setup, launch templates, monitoring, completion, failure handling, and external attachment.
 
-Frozen before the pilot starts (14 days of operation after the supervisor passes failure-injection tests). Passing raises confidence a little; failing cuts it a lot.
+Here, `ndm` means `node bin/ndm.mjs` from a checkout, or `node /absolute/path/to/checkout/bin/ndm.mjs` elsewhere. Run every command for one registry from the same workspace: config and state resolve from the invocation directory. Quote paths containing spaces.
 
-| # | Prediction | Threshold |
-|---|---|---|
-| P1 | Status claims are evidence-backed | 100% of ≥40 launches registered before spawn; zero `running` without start proof; zero `completed` without artifact + gate |
-| P2 | Local detection is fast and consistent | ≥20 injected failures (fail-to-start, mid-run exit) alarmed at the endpoint ≤35 s / ≤30 s; detection latency p95−p50 ≤10 s |
-| P3 | Stalls are not hidden by a live heartbeat | 8 injected stalls (heartbeat loss, no-progress) alarmed ≤65 s / ≤320 s per profile; zero shown as healthy |
-| P4 | One dead host or channel does not silence alarms | Host-loss alarm ≤70 s; queued events delivered ≤60 s after channel recovery, none lost, no duplicated external actions |
-| P5 | Alarms do not eat the benefit | False alarms ≤5 per 100 runs; triage ≤10 min per 10 runs; zero material defects shipped because a gate replaced review |
-| P6 | The orchestrator's net load actually drops | Recurring supervision load −≥15% vs a comparable 7-day baseline, with human intervention per run not rising |
+**The contract**
 
-## Design principles
+1. **Register before spawn.** A process launched outside the registry is unsupervised by definition.
+2. **Launch through the wrapper.** `ndm run` records start confirmation, heartbeat, and exit; raw `nohup`, `&`, or fire-and-forget subprocesses do not.
+3. **Start is proven, not assumed.** A launch command returning without error is not evidence; verify a PID and `started_at` in the run's status record within ~15 seconds, with transitions in `history`/`events.jsonl`. Short jobs may already be in `awaiting_review` or `failed`.
+4. **Exit 0 is not done.** It leads to `awaiting_review`; only `ndm complete` can mark `completed`. This protocol requires both `--artifact` and `--gate-cmd`; the CLI permits either or both to be omitted and checks only what was declared.
+5. **Report only what the registry shows.** Say "running" only with start proof and a fresh `last_heartbeat_at` relative to `heartbeatStaleSeconds`; check incidents for no-progress alarms. `status` does not sweep, so a stored `running` label alone is insufficient. Say "completed" only after `complete` succeeds; an unobservable run is *unobserved*, never fine.
 
-- **One small core, no platform.** Plain files and one watcher process per host; events append to a JSONL log the operator reads. No shared LLM runtime.
-- **Generic by config.** Owners and run paths come from registration; state paths, the optional webhook, and thresholds come from config — nothing about one person's fleet is baked in.
-- **Honest states.** A run that cannot be observed is reported as *unobserved*, never as fine. Missing data is shown as missing, not as zero.
-- **Safe retries only.** Operations that can duplicate external effects are never retried blindly; they stop for a human/agent decision.
+**Non-negotiables**
+
+- Keep `ndm watch` running before the first run, or schedule `sweep`; without either there is no periodic stall/deadline detection or escalation. Register/run/complete still emit immediate failure alarms. A separate terminal suffices; a process manager is optional.
+- Write the brief first: task, working directory, expected artifact, and done criteria. Keep briefs and artifacts in one folder per run, using absolute paths. Relative `--brief` resolves from the invocation directory; child arguments resolve from `--cwd` and cannot be validated by preflight.
+- Capture the registration ID and check the exit code: preflight rejection prints an ID too. Fix the cause instead of bypassing preflight.
+- Keep long-run wrappers alive. Child stdout/stderr and gate output go to `<stateDir>/logs/<RUN_ID>.log`; retain wrapper stderr separately. Missing start proof requires reading the wrapper log and `events.jsonl`, fixing the cause, and registering a new run. Never relaunch the identical failing command a third time; escalate with the failure and log lines.
+- Monitor with `ndm status <RUN_ID>` / `ndm list`; never let the human discover a death. Read and judge the artifact before completion. If the gate fails, fix the work, never weaken the gate. Do not kill a quiet watcher.
+- For `failed` / `blocked` / `timed_out`, read `incidents.jsonl`, `alarms.jsonl`, and `events.jsonl` before deciding; acknowledge handled incidents with `ndm ack <INCIDENT_ID>`. Retry through a new registration whose brief notes the previous ID and what changed; never hand-edit registry state.
+- External processes register before launch, then attach with `ndm start <RUN_ID> --pid <PID>`, send `ndm heartbeat <RUN_ID>` more often than `heartbeatStaleSeconds`, and `ndm progress <RUN_ID>` at milestones in the same registry. They cannot reach `awaiting_review`/`completed` in v1; use `ndm run` when verified completion is required.
 
 ## Running v1
 
@@ -276,6 +263,34 @@ Optional `ndm.config.json` (not shipped or required) is read from the invocation
 Define additional profiles under `profiles`, then select one with `register --profile NAME`. `stateDir`, brief, and working-directory paths resolve from the invocation directory; relative artifact paths resolve from the run's working directory — use the same config directory for every command supervising a registry. State lives in `runs.json` plus append-only `events.jsonl`, `incidents.jsonl`, and `alarms.jsonl` in the state directory.
 
 Durability limits, lock recovery, webhook delivery semantics, and the full v1 contract live in [REPORT.md](REPORT.md) and [docs/SPEC.md](docs/SPEC.md). One operational warning belongs here: state includes brief paths, command arguments, and captured output — keep the state directory on trusted local storage with access limited to intended operators, and keep secrets out of argv and logs. This is a trusted-operator tool, not isolation between untrusted tenants.
+
+## Project status
+
+**v1 implemented; 14-day pilot running (started 13 Nov 2026).** The design and pre-registered predictions are public from day one; the numbers will follow the pilot, pass or fail. [REPORT.md](REPORT.md) records 30/30 passing tests and four passing failure-injection scenarios as implementation checks. These do not establish pilot results, latency distributions, or an SLA; P1–P6 remain unassessed, including operational launch coverage, false alarms, triage, artifact quality, and supervision workload reduction.
+
+### Pre-registered pilot predictions
+
+Frozen before the pilot starts (14 days of operation after the supervisor passes failure-injection tests). Passing raises confidence a little; failing cuts it a lot.
+
+| # | Prediction | Threshold |
+|---|---|---|
+| P1 | Status claims are evidence-backed | 100% of ≥40 launches registered before spawn; zero `running` without start proof; zero `completed` without artifact + gate |
+| P2 | Local detection is fast and consistent | ≥20 injected failures (fail-to-start, mid-run exit) alarmed at the endpoint ≤35 s / ≤30 s; detection latency p95−p50 ≤10 s |
+| P3 | Stalls are not hidden by a live heartbeat | 8 injected stalls (heartbeat loss, no-progress) alarmed ≤65 s / ≤320 s per profile; zero shown as healthy |
+| P4 | One dead host or channel does not silence alarms | Host-loss alarm ≤70 s; queued events delivered ≤60 s after channel recovery, none lost, no duplicated external actions |
+| P5 | Alarms do not eat the benefit | False alarms ≤5 per 100 runs; triage ≤10 min per 10 runs; zero material defects shipped because a gate replaced review |
+| P6 | The orchestrator's net load actually drops | Recurring supervision load −≥15% vs a comparable 7-day baseline, with human intervention per run not rising |
+
+## Design principles
+
+- **One small core, no platform.** Plain files, one watcher per host, and an append-only JSONL event log the operator reads. No shared LLM runtime.
+- **Generic by config.** Registration supplies owners and run paths; config supplies state paths, the optional webhook, and thresholds. No personal setup is baked in.
+- **Honest states.** Unobservable runs are *unobserved*, never fine. Missing data stays missing, not zero.
+- **Safe retries only.** Operations that can duplicate external effects stop for a human/agent decision, never a blind retry.
+
+## Contributing
+
+Run `npm test` and `node scripts/inject-failures.mjs` from the checkout root. Changes must keep the test suite green and the failure-injection script passing: missing brief, exit 1, heartbeat stall, and deadline. Issues welcome.
 
 ## Origin
 
