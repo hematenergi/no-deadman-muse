@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-NoDeadman Muse — logo generator: Lentera Penjaga.
+NoDeadman Muse — logo generator: Watchkeeper's Lantern.
 The lantern is symmetric by construction:
   - every coordinate derives from ONE centre axis (cx=60); the right
     half of every curve is the arithmetic mirror of the left half;

@@ -1,122 +1,122 @@
 # Adaptability review — NoDeadman Muse
 
-Tanggal: 2026-11-13. Pemeriksa: Codex, pemeriksaan independen terhadap dokumentasi dan prosedur adopsi. Baseline checkout: `59583f0d61f360ba5c76ffbe7d5c738b90e220b1`. Lingkungan uji: macOS/Darwin arm64, Node.js v26.8.2, shell POSIX. Tidak ada commit/push.
+Date: 2026-11-13. Reviewer: Codex, independent review of documentation and adoption procedures. Baseline checkout: `59583f0d61f360ba5c76ffbe7d5c738b90e220b1`. Test environment: macOS/Darwin arm64, Node.js v26.8.2, POSIX shell. No commit/push.
 
-## Cakupan dan hasil
+## Scope and results
 
-Seluruh README, SKILL, SPEC yang sebenarnya berada di `docs/SPEC.md`, REPORT, dan LICENSE dibaca. Tidak ada `ndm.config.json` bawaan di root: contoh JSON README dibandingkan dengan `loadConfig()`. Kode CLI, registrasi/preflight, completion, penyimpanan, supervisor, alarm, dan tes terkait ditelusuri untuk memeriksa klaim dokumentasi. Pemeriksaan isi publik juga menemukan ketergantungan mesin asal di dokumentasi/generator aset.
+The entire README, SKILL, SPEC actually located at `docs/SPEC.md`, REPORT, and LICENSE were read. There is no bundled `ndm.config.json` at the root: the README's JSON example was compared with `loadConfig()`. The CLI code, registration/preflight, completion, storage, supervisor, alarms, and related tests were traced to check the documentation's claims. The public content review also found dependencies on the original machine in the documentation/asset generator.
 
-Koreksi dilakukan di working tree. CLI supervisor tidak diubah: temuan perilaku di bawah cocok dengan kontrak v1 dan diperbaiki di dokumen. Generator aset opsional diperbaiki agar input font dan renderer dapat dipilih operator; tidak ada aset logo yang diregenerasi. Kedua suite wajib hijau. Ini bukti adopsi lokal dan konsistensi dokumen, bukan bukti bahwa semua OS atau semua integrasi agent telah diuji.
+Corrections were made in the working tree. The supervisor CLI was not changed: the behavioral findings below match the v1 contract and were corrected in the documents. The optional asset generator was fixed to let the operator select font and renderer inputs; no logo assets were regenerated. Both required suites passed. This is evidence of local adoption and document consistency, not evidence that every OS or every agent integration has been tested.
 
-## Daftar temuan dan perbaikan
+## List of findings and fixes
 
-Lokasi merujuk bagian/nama fungsi dalam hasil koreksi, agar tetap dapat ditemukan setelah nomor baris berubah.
+Locations refer to sections/function names in the corrected version, so they remain discoverable after line numbers change.
 
-| # | Berkas + lokasi | Kelas | Cacat yang ditemukan → perbaikan |
+| # | File + location | Class | Defect found → fix |
 |---|---|---|---|
-| 1 | README, paragraf pembuka | tidak-generik | Sasaran dibatasi pada “Muse agents” → individu, tim, dan agent; nama produk tetap NoDeadman Muse. |
-| 2 | README, pembuka / How it works | klaim-tak-cocok-kode | Seolah semua peluncuran otomatis terdaftar dan semua run yang tidak pernah diluncurkan terdeteksi dalam detik → hanya run yang didaftarkan yang diawasi; `registered` yang tidak diluncurkan terdeteksi saat deadline, bukan ambang start 15 s. |
-| 3 | README Quickstart; README/SKILL setup | tidak-generik | Shell POSIX, `test`, keberadaan checkout, dan direktori watcher kurang eksplisit → prasyarat dinyatakan, watcher dari direktori registry yang sama, process manager hanya opsi, native Windows belum diverifikasi. |
-| 4 | README Quickstart / Running v1 | salah-eksekusi | `<RUN_ID>`/`RUN_ID` perlu penggantian manual dan raw angle brackets bermakna redirection bagi shell → contoh yang siap dijalankan menangkap ID ke variabel shell dan mengutipnya. Exit 1 contoh gagal ditandai sebagai hasil yang diharapkan. |
-| 5 | README/SKILL register | tidak-konsisten | Instruksi hanya menyuruh menangkap bare ID, tanpa menyebut penolakan preflight juga mencetak ID → wajib cek exit code; jelaskan `blocked`, exit 1, dan pesan stderr. Input CLI yang tidak valid dapat ditolak sebelum menghasilkan ID. |
-| 6 | README For agents; SKILL pembuka | tidak-generik | Penggunaan CLI seolah terikat checkout/current directory dan file konfigurasi wajib ada → workspace registry bebas dipilih, konfigurasi opsional, CLI dapat dipanggil lewat path absolut dari workspace lain; tidak perlu runtime/tool/folder skill tertentu. |
-| 7 | README/SKILL Launch workflow | klaim-tak-cocok-kode | Relative brief selalu dinyatakan salah → aturan sebenarnya dijelaskan: brief/cwd terhadap direktori invokasi, artifact terhadap run cwd, argumen child terhadap child cwd. |
-| 8 | README Use case 1 | salah-eksekusi | Brief `./runs/REFAC-123/BRIEF.md` diteruskan lagi ke agent yang cwd-nya sudah folder tersebut → path brief absolut yang sama dipakai untuk registrasi dan child. |
-| 9 | README Use cases 1 dan 3; README/SKILL template register | tidak-konsisten | Command agent, BRIEF/RELEASE, release script, serta parent `dist` tidak disediakan dan tidak jelas sebagai template → prasyarat/example ditandai eksplisit; placeholder dijelaskan dan harus diganti/diquote. Contoh Running v1 menyebut brief dari Quickstart. |
-| 10 | README/SKILL setup | klaim-tak-cocok-kode | Tanpa watcher diklaim tidak ada alarm sama sekali → register/run/complete tetap mengirim alarm kegagalan langsung; sweep/watch diperlukan untuk pemeriksaan periodik dan eskalasi. |
-| 11 | README/SKILL start verification | klaim-tak-cocok-kode | Polling wajib melihat `starting` lalu `running`, sehingga child singkat yang sukses dapat disangka mati → periksa PID, `started_at`, history/event; polling boleh sudah melihat review/failed. Ketiadaan bukti disebut unconfirmed, bukan bukti pasti mati. |
-| 12 | README/SKILL completion contract | klaim-tak-cocok-kode | Artifact dan gate dinyatakan selalu wajib oleh CLI → keduanya opsional menurut SPEC/kode; protokol adopsi tetap meminta keduanya untuk pembuktian hasil, dengan pembedaan jelas dari aturan CLI. |
-| 13 | README/SKILL completion | tidak-konsisten | Gate digambarkan membuktikan keberadaan saja → existence + exit gate hanya membuktikan pemeriksaan yang dideklarasikan; review kualitas tetap tugas operator. |
-| 14 | README/SKILL status monitoring | klaim-tak-cocok-kode | `status` seolah memeriksa freshness secara langsung → hanya membaca state tersimpan; periksa timestamp heartbeat dan insiden progress, jangan mengandalkan label `running` saja. |
-| 15 | README How it works; SKILL setup/failure | klaim-tak-cocok-kode | Sweep “setiap 10 s”, start “≤15 s”, eskalasi tepat 2 menit, dan delivery ≤30 s terdengar seperti jaminan → threshold/default dijelaskan terpisah dari jadwal sweep, durasi pass, dan prediksi pilot. Webhook satu POST best effort dengan timeout 5 s, tanpa retry otomatis. |
-| 16 | README How it works | tidak-konsisten | Diagram berpotensi menyiratkan semua cabang terminal hanya dari review → success path dan cabang terminal dari setiap state aktif dijelaskan terpisah. |
-| 17 | README/SKILL preflight | klaim-tak-cocok-kode | “Declared prerequisites”/working directory “correct” terlalu luas → pemeriksaan yang benar disebutkan: brief readable/nonempty, cwd direktori, executable, parent artifact. Argumen/dependensi task bukan tanggung jawab preflight. |
-| 18 | README Quickstart, injection description | klaim-tak-cocok-kode | Wrapper exit-1 diatribusikan pada watcher dan injection diklaim mencakup setiap failure class → wrapper melaporkan exit langsung; injection hanya empat skenario yang memang ada. |
-| 19 | README Use case 2 | salah-eksekusi | `$!` dipakai tanpa peluncuran background pada contoh → PID eksplisit dari scheduler/operator, setelah registrasi sebelum launch; ID/PID ditandai placeholder. |
-| 20 | README/SKILL external processes | klaim-tak-cocok-kode | Jalur attach tidak menjelaskan tidak adanya successful-exit API → ditandai hanya untuk liveness, tidak dapat menuju review/completed; rekomendasi menjadwalkan `ndm run` untuk verified completion. |
-| 21 | README Use case 2; SKILL external processes; docs/SPEC supervisor | klaim-tak-cocok-kode | Heartbeat/no-progress tercampur sebagai “unobserved” otomatis → heartbeat basi mempertahankan `running` dengan field `observation`; no-progress perlu profile dan hanya mengirim insiden. Interval heartbeat eksternal dijelaskan. |
-| 22 | README Use case 4 / Design principles; SKILL setup | tidak-generik | Registry “whole fleet” bisa terbaca lintas host/tenant; event “bus” dan semua metadata “in config” tidak tepat → satu local registry per host, operator tepercaya, JSONL log; owner/path run dari register, host settings dari config. Data argv/log perlu dibatasi aksesnya. |
-| 23 | README Use case 4 | klaim-tak-cocok-kode | Ack terdengar menghapus item antrean → insiden dan ack append ke history; ack tidak menghapusnya. |
-| 24 | README/SKILL launch logs | tidak-konsisten | “Wrapper log” tidak dibedakan dari output child/gate → lokasi `<stateDir>/logs/<RUN_ID>.log` disebutkan, wrapper stderr disimpan terpisah. |
-| 25 | REPORT, Perintah verifikasi | tidak-generik | Wrapper shell lokal tampil sebagai langkah verifikasi → perintah langsung dicantumkan; angka lama tetap ditandai hasil implementasi awal, bukan hasil uji baru atau pilot. |
-| 26 | REPORT, celah #7 | tidak-konsisten | “Belum ada pilot 14 hari” ambigu terhadap status README yang sedang berjalan → diperjelas belum selesai/dinilai. Makna status pilot tidak berubah. |
-| 27 | docs/SPEC, pembuka / supervisor / out of scope | tidak-konsisten | Referensi README tidak berupa tautan relatif; deskripsi wrapper loss terlalu ringkas → tautan `../README.md` dan aturan wrapper PID versus external PID diselaraskan dengan implementasi yang menghindari race exit child. Tidak mengubah kontrak state. |
-| 28 | assets/BRAND.md; assets/build-logo.py, konfigurasi font/renderer | tidak-generik | Nama pribadi/agent dan path font/helper renderer milik mesin asal bocor ke isi publik → riwayat brand dibuat umum, generator menerima `--serif-font`, `--tag-font`, serta `--resvg`, dan memakai CLI resvg biasa tanpa helper di luar repo. Geometri, warna, dan aset yang disertakan tidak diubah. |
-| 29 | assets/BRAND.md, daftar berkas / regenerasi | tidak-konsisten | Proof/context PNG disebut seolah termasuk checkout; dependensi generator tidak lengkap → hasil generator ditandai tidak disertakan; Python/fontTools/Pillow/numpy/resvg/font dicantumkan sebagai prasyarat opsional, terpisah dari CLI Node tanpa runtime dependencies. Klaim kegagalan parser spesifik diganti dengan alasan kompatibilitas SVG umum. |
+| 1 | README, opening paragraph | non-generic | Audience limited to “Muse agents” → individuals, teams, and agents; the product name remains NoDeadman Muse. |
+| 2 | README, opening / How it works | claim-code-mismatch | Implied that all launches are automatically registered and all runs that never launch are detected within seconds → only registered runs are monitored; an unlaunched `registered` run is detected at its deadline, not the 15 s start threshold. |
+| 3 | README Quickstart; README/SKILL setup | non-generic | POSIX shell, `test`, an existing checkout, and the watcher directory were not explicit enough → prerequisites stated, watcher run from the same registry directory, process manager only an option, native Windows unverified. |
+| 4 | README Quickstart / Running v1 | execution-error | `<RUN_ID>`/`RUN_ID` required manual replacement and raw angle brackets mean redirection to the shell → runnable examples capture the ID in a shell variable and quote it. Exit 1 in the failure example is marked as the expected result. |
+| 5 | README/SKILL register | inconsistent | Instructions only said to capture the bare ID, without mentioning that preflight rejection also prints an ID → require checking the exit code; explain `blocked`, exit 1, and stderr messages. Invalid CLI input may be rejected before producing an ID. |
+| 6 | README For agents; SKILL opening | non-generic | CLI usage appeared tied to the checkout/current directory and a configuration file appeared mandatory → the registry workspace can be chosen freely, configuration is optional, the CLI can be invoked through an absolute path from another workspace; no particular runtime/tool/skill folder is required. |
+| 7 | README/SKILL Launch workflow | claim-code-mismatch | Relative briefs were always described as wrong → actual rules explained: brief/cwd relative to the invocation directory, artifact relative to the run cwd, child arguments relative to the child cwd. |
+| 8 | README Use case 1 | execution-error | Brief `./runs/REFAC-123/BRIEF.md` passed again to an agent whose cwd was already that folder → the same absolute brief path is used for registration and the child. |
+| 9 | README Use cases 1 and 3; README/SKILL register template | inconsistent | Agent command, BRIEF/RELEASE, release script, and parent `dist` were not provided and were not clearly marked as templates → prerequisites/examples marked explicitly; placeholders explained and must be replaced/quoted. The Running v1 example mentions the brief from Quickstart. |
+| 10 | README/SKILL setup | claim-code-mismatch | Claimed there were no alarms at all without a watcher → register/run/complete still send immediate failure alarms; sweep/watch are required for periodic checks and escalation. |
+| 11 | README/SKILL start verification | claim-code-mismatch | Polling had to see `starting` then `running`, so a successful short-lived child could be mistaken for a dead one → check PID, `started_at`, history/events; polling may already see review/failed. Missing evidence is described as unconfirmed, not definitive proof of death. |
+| 12 | README/SKILL completion contract | claim-code-mismatch | Artifact and gate described as always required by the CLI → both are optional according to SPEC/code; the adoption protocol still requests both as evidence of results, with a clear distinction from CLI rules. |
+| 13 | README/SKILL completion | inconsistent | Gate described as proving existence alone → existence + gate exit only prove the declared checks; quality review remains the operator's job. |
+| 14 | README/SKILL status monitoring | claim-code-mismatch | `status` appeared to check freshness directly → it only reads stored state; check heartbeat timestamps and progress incidents, do not rely on the `running` label alone. |
+| 15 | README How it works; SKILL setup/failure | claim-code-mismatch | Sweep “every 10 s”, start “≤15 s”, escalation at exactly 2 minutes, and delivery ≤30 s sounded like guarantees → thresholds/defaults explained separately from sweep scheduling, pass duration, and pilot predictions. Webhook is a single best-effort POST with a 5 s timeout, without automatic retry. |
+| 16 | README How it works | inconsistent | Diagram could imply that all terminal branches originate only from review → success path and terminal branches from each active state explained separately. |
+| 17 | README/SKILL preflight | claim-code-mismatch | “Declared prerequisites”/working directory “correct” too broad → actual checks specified: readable/nonempty brief, directory cwd, executable, artifact parent. Task arguments/dependencies are not preflight's responsibility. |
+| 18 | README Quickstart, injection description | claim-code-mismatch | Wrapper exit-1 attributed to the watcher and injection claimed to cover every failure class → wrapper reports exit immediately; injection covers only the four scenarios actually present. |
+| 19 | README Use case 2 | execution-error | `$!` used without a background launch in the example → explicit PID from the scheduler/operator, after registration and before launch; ID/PID marked as placeholders. |
+| 20 | README/SKILL external processes | claim-code-mismatch | Attach path did not explain the absence of a successful-exit API → marked as liveness-only, cannot reach review/completed; scheduling `ndm run` recommended for verified completion. |
+| 21 | README Use case 2; SKILL external processes; docs/SPEC supervisor | claim-code-mismatch | Heartbeat/no-progress conflated as automatic “unobserved” → stale heartbeat retains `running` with an `observation` field; no-progress requires a profile and only sends an incident. External heartbeat interval explained. |
+| 22 | README Use case 4 / Design principles; SKILL setup | non-generic | Registry “whole fleet” could be read as cross-host/tenant; event “bus” and all metadata “in config” inaccurate → one local registry per host, trusted operators, JSONL log; run owner/path from register, host settings from config. Access to argv/log data needs to be restricted. |
+| 23 | README Use case 4 | claim-code-mismatch | Ack sounded like it removed queue items → incidents and acks append to history; ack does not remove them. |
+| 24 | README/SKILL launch logs | inconsistent | “Wrapper log” not distinguished from child/gate output → location `<stateDir>/logs/<RUN_ID>.log` specified, wrapper stderr stored separately. |
+| 25 | REPORT, Verification commands | non-generic | Local shell wrapper appeared as a verification step → direct commands listed; old figures remain marked as initial implementation results, not new test or pilot results. |
+| 26 | REPORT, gap #7 | inconsistent | “No 14-day pilot yet” ambiguous relative to the README's ongoing status → clarified as not yet completed/assessed. The meaning of the pilot status is unchanged. |
+| 27 | docs/SPEC, opening / supervisor / out of scope | inconsistent | README reference was not a relative link; wrapper loss description too brief → `../README.md` link and wrapper PID versus external PID rules aligned with the implementation that avoids the child-exit race. State contract unchanged. |
+| 28 | assets/BRAND.md; assets/build-logo.py, font/renderer configuration | non-generic | Personal/agent names and font/helper renderer paths from the original machine leaked into public content → brand history made generic, generator accepts `--serif-font`, `--tag-font`, and `--resvg`, and uses the standard resvg CLI without a helper outside the repo. Geometry, colors, and bundled assets unchanged. |
+| 29 | assets/BRAND.md, file list / regeneration | inconsistent | Proof/context PNGs described as if included in the checkout; generator dependencies incomplete → generator outputs marked as not included; Python/fontTools/Pillow/numpy/resvg/fonts listed as optional prerequisites, separate from the Node CLI with no runtime dependencies. Specific parser-failure claim replaced with a general SVG compatibility rationale. |
 
-## Bukti eksekusi
+## Execution evidence
 
-### Scratch dan Quickstart
+### Scratch and Quickstart
 
-Percobaan clone HTTPS sesuai README benar-benar dijalankan dan **gagal exit 128**: `Could not resolve host: github.com`. Ini batas DNS/network sandbox, bukan keberhasilan clone publik. Untuk melanjutkan, baseline yang sama di-clone lokal dengan `git clone --no-hardlinks` ke `/tmp/ndm-adaptability-original`. Clone final baru di `/tmp/ndm-adaptability-final-zmw_2_a2/no-deadman-muse` menerima overlay hanya file hasil koreksi dari working tree karena perubahan memang tidak di-commit.
+The HTTPS clone attempt from the README was actually run and **failed with exit 128**: `Could not resolve host: github.com`. This is a sandbox DNS/network limitation, not a successful public clone. To continue, the same baseline was cloned locally with `git clone --no-hardlinks` into `/tmp/ndm-adaptability-original`. A fresh final clone at `/tmp/ndm-adaptability-final-zmw_2_a2/no-deadman-muse` received an overlay of only the corrected files from the working tree because the changes were deliberately not committed.
 
-Quickstart asli berhasil setelah placeholder ID diganti dengan ID sebenarnya. Reproduksi terpisah terhadap path brief Use case 1 asli: register exit 0, child membaca path yang menjadi salah setelah cwd berubah, run exit 1. Ini cacat contoh, bukan kegagalan preflight: preflight tidak memahami argumen milik agent lain.
+The original Quickstart succeeded after the placeholder ID was replaced with a real ID. Separate reproduction of the original Use case 1 brief path: register exit 0, child read a path that became incorrect after cwd changed, run exit 1. This is an example defect, not a preflight failure: preflight does not understand another agent's arguments.
 
-Quickstart final diekstrak dari fenced blocks README dan dijalankan dengan shell yang sama agar variabel ID bertahan. Watcher berjalan sebagai proses terpisah dengan default config dan dihentikan melalui SIGTERM (exit 0).
+The final Quickstart was extracted from the README's fenced blocks and run in the same shell to preserve ID variables. The watcher ran as a separate process with default config and was stopped via SIGTERM (exit 0).
 
-| Langkah | Hasil final |
+| Step | Final result |
 |---|---|
 | Write brief | Exit 0; file non-empty. |
-| Register dengan artifact dan gate | Exit 0; bare UUID ditangkap di `RUN_ID`. |
-| Run + status | Exit 0; `awaiting_review`, PID dan `started_at` ada. |
-| Complete | Exit 0; `result.txt` tepat berisi `report body`; history `registered → starting → running → awaiting_review → completed`. |
-| Register contoh gagal | Exit 0; ID baru, terpisah dari run sukses. |
-| Run `process.exit(1)` | **Exit 1 yang diharapkan**; status `failed`, insiden/alarm `process_failed` untuk ID yang sama. |
-| List, status tanpa ID, ack, sweep | Exit 0; JSON dan ack persisten diverifikasi. |
-| Injection dari Quickstart | Exit 0, PASS. |
+| Register with artifact and gate | Exit 0; bare UUID captured in `RUN_ID`. |
+| Run + status | Exit 0; `awaiting_review`, PID and `started_at` present. |
+| Complete | Exit 0; `result.txt` contains exactly `report body`; history `registered → starting → running → awaiting_review → completed`. |
+| Register failure example | Exit 0; new ID, separate from the successful run. |
+| Run `process.exit(1)` | **Expected exit 1**; status `failed`, incident/alarm `process_failed` for the same ID. |
+| List, status without ID, ack, sweep | Exit 0; JSON and persistent ack verified. |
+| Injection from Quickstart | Exit 0, PASS. |
 
-ID bukti final: sukses `629bdefe-8527-409b-a81a-790eeab226d7`; gagal `e94ade84-5f9c-4e10-8af4-b6d1976b41c3`. State uji terisolasi dari `.ndm` workspace kerja. Proses watcher/child yang diluncurkan untuk uji dihentikan setelah pemeriksaan.
+Final evidence IDs: success `629bdefe-8527-409b-a81a-790eeab226d7`; failure `e94ade84-5f9c-4e10-8af4-b6d1976b41c3`. Test state isolated from the working workspace's `.ndm`. Watcher/child processes launched for testing were stopped after the checks.
 
-### Template dan adaptabilitas
+### Templates and adaptability
 
-Runner final mencatat **29 pemanggilan shell/CLI**, mencakup:
+The final runner recorded **29 shell/CLI invocations**, covering:
 
-- Seluruh shell block Quickstart setelah tahap clone, serta block Running v1 (termasuk `npm test` dan injection) dengan prasyarat brief yang tertulis.
-- Use case coding-agent dengan executable fixture `your-agent-command`: benar-benar membaca brief absolut dari cwd run dan menghasilkan REPORT, lalu run/complete berhasil. Ini uji kontrak CLI memakai stub, bukan bukti kompatibilitas produk agent tertentu.
-- Use case release dengan fixture `RELEASE.md`, parent `dist`, dan executable `scripts/release.sh`: register/run/complete berhasil. Isi fixture bundle hanya data uji untuk gate `test -s`, bukan uji mutu atau format ZIP.
-- Template register README dan SKILL identik setelah whitespace diabaikan; keduanya diisi nilai yang sama dan berhasil dari workspace di luar checkout melalui path CLI absolut. Nama direktori brief, cwd, dan state mengandung spasi; owner bebas `example-team`.
-- Template external start/heartbeat/progress kedua dokumen dijalankan menggunakan PID child nyata, setelah register. Complete saat masih running ditolak; setelah PID hilang, sweep mengubah status menjadi failed. Tidak ada successful-exit eksternal yang diasumsikan.
-- Profile `batch` dengan no-progress 0.1 s memberi alarm walau heartbeat masih segar dan tidak mengubah observation. Kehilangan heartbeat memberi `unobserved`; ack berhasil. Timer dipercepat hanya pada workspace pengujian profile.
-- Seluruh field JSON default README cocok dengan hasil `loadConfig()` tanpa file config, setelah normalisasi `stateDir` relatif menjadi absolut. `--help` dan executable shebang juga exit 0.
+- All Quickstart shell blocks after the clone step, plus the Running v1 block (including `npm test` and injection) with the documented brief prerequisite.
+- Coding-agent use case with the `your-agent-command` executable fixture: actually read the absolute brief from the run cwd and produced REPORT, then run/complete succeeded. This is a CLI contract test using a stub, not evidence of compatibility with a particular agent product.
+- Release use case with fixture `RELEASE.md`, parent `dist`, and executable `scripts/release.sh`: register/run/complete succeeded. The fixture bundle contains only test data for the `test -s` gate, not a quality or ZIP format test.
+- README and SKILL register templates are identical after ignoring whitespace; both were filled with the same values and succeeded from a workspace outside the checkout through an absolute CLI path. Brief, cwd, and state directory names contain spaces; arbitrary owner `example-team`.
+- Both documents' external start/heartbeat/progress templates were run using a real child PID, after register. Complete while still running was rejected; after the PID disappeared, sweep changed the status to failed. No external successful exit was assumed.
+- Profile `batch` with no-progress 0.1 s raised an alarm even while the heartbeat was fresh and did not change observation. Losing heartbeat produced `unobserved`; ack succeeded. Timers were accelerated only in the profile test workspace.
+- All README default JSON fields matched `loadConfig()` without a config file, after normalizing relative `stateDir` to absolute. `--help` and the executable shebang also exited 0.
 
-Pengukuran tambahan tanpa file config di scratch `/tmp/ndm-default-HZTeCJ`: wrapper nyata memberi heartbeat setelah **10.005 ms**; external PID yang tetap hidup tanpa heartbeat mendapat `heartbeat_stale` setelah **50.092 ms** pada watcher default. Pada sekitar detik 46, pembacaan `status` masih belum memuat observation `unobserved`; setelah sweep berikutnya, status tetap `running` dan observation menjadi `unobserved`. Tidak ada alarm no-progress karena profile default tidak menetapkan batas. Ini satu sampel yang mendukung aturan threshold + sweep, bukan jaminan latensi.
+Additional measurement without a config file in scratch `/tmp/ndm-default-HZTeCJ`: a real wrapper emitted a heartbeat after **10.005 ms**; an external PID that stayed alive without heartbeat received `heartbeat_stale` after **50.092 ms** under the default watcher. At around second 46, reading `status` still did not include observation `unobserved`; after the next sweep, status remained `running` and observation became `unobserved`. There was no no-progress alarm because the default profile sets no limit. This is one sample supporting the threshold + sweep rule, not a latency guarantee.
 
-### YAML dan tautan
+### YAML and links
 
-Frontmatter SKILL sudah valid pada baseline dan tetap valid setelah koreksi. Diperiksa menggunakan parser YAML sungguhan **Ruby Psych 5.3.1**, `YAML.safe_load`, bukan regex sebagai parser. Assertion memastikan map berisi `name` dan `description` dengan nilai string non-empty. Tidak perlu menambah dependency YAML ke package. Deskripsi yang sudah diquote dipertahankan; tidak ada frontmatter lain dalam dokumen publik repo.
+SKILL frontmatter was already valid at baseline and remains valid after correction. Checked using a real YAML parser, **Ruby Psych 5.3.1**, `YAML.safe_load`, not regex as a parser. Assertions ensure the map contains `name` and `description` with non-empty string values. No YAML dependency needed to be added to the package. The already-quoted description was preserved; there is no other frontmatter in the repo's public documents.
 
-Tautan relatif Markdown dan `src` HTML diperiksa terhadap file repo, termasuk anchor README: **12 referensi, seluruhnya valid**, sesudah berkas laporan ini tersedia. Header README, status pilot, seluruh bagian prediksi P1–P6, LICENSE, dan semua SVG/PNG yang disertakan juga dibandingkan byte demi byte dengan baseline: semuanya tetap identik. Sintaks kedua file Python lolos `ast.parse`. `ndm.config.json` tidak ditautkan sebagai berkas bawaan; JSON README adalah contoh konfigurasi opsional.
+Relative Markdown links and HTML `src` were checked against repo files, including README anchors: **12 references, all valid**, after this report file became available. The README header, pilot status, the entire P1–P6 prediction section, LICENSE, and all bundled SVG/PNG files were also compared byte for byte with baseline: all remained identical. Both Python files passed `ast.parse` syntax checks. `ndm.config.json` is not linked as a bundled file; the README JSON is an optional configuration example.
 
-### Regresi dari root repo
+### Regression from the repo root
 
-| Perintah | Hasil |
+| Command | Result |
 |---|---|
 | `npm test` | Exit 0; **30 tests, 30 pass, 0 fail, 0 skipped**. |
-| `node scripts/inject-failures.mjs` | Exit 0; **PASS**, seluruh empat skenario. |
-| `python3 test/logo-generator.test.py` | Exit 0; 1 unittest dengan 3 subkasus: help, font hilang, renderer hilang. Semuanya memastikan tidak ada output aset yang ditulis sebelum validasi berhasil; tidak memerlukan paket grafis. |
-| Parser YAML Psych | Exit 0; struktur/name/description valid. |
+| `node scripts/inject-failures.mjs` | Exit 0; **PASS**, all four scenarios. |
+| `python3 test/logo-generator.test.py` | Exit 0; 1 unittest with 3 subcases: help, missing font, missing renderer. All ensure no asset output is written before validation succeeds; no graphics packages required. |
+| Psych YAML parser | Exit 0; structure/name/description valid. |
 | `git diff --check` | Exit 0. |
 
-Sampel injection root pada pemeriksaan ini (wall clock, termasuk overhead subprocess): brief hilang sampai alarm teramati **39 ms**; exit-1 dari spawn CLI ke incident **57 ms**, spawn child ke incident **23 ms**, spawn CLI ke alarm teramati **61 ms**; heartbeat stall **200 ms**; deadline **227 ms**. Threshold heartbeat/deadline injection **0.1 s**, bukan default operasional. Angka ini satu sampel, bukan SLA atau hasil pilot.
+Root injection sample in this review (wall clock, including subprocess overhead): missing brief to observed alarm **39 ms**; exit-1 from CLI spawn to incident **57 ms**, child spawn to incident **23 ms**, CLI spawn to observed alarm **61 ms**; heartbeat stall **200 ms**; deadline **227 ms**. Injection heartbeat/deadline thresholds **0.1 s**, not operational defaults. These figures are one sample, not an SLA or pilot results.
 
-## Yang sengaja tidak diubah
+## Intentionally unchanged
 
-- Logo/header README, SVG/PNG yang disertakan, warna/geometri brand: bukan tugas desain ulang. Identitas produk “NoDeadman Muse” tetap; “Muse” sebagai prasyarat agent sudah dihapus.
-- Prediksi P1–P6 serta status pilot pada README: beku sesuai mandat; tidak dinyatakan lulus berdasarkan suite ini. Origin tetap cerita generik satu-person multi-agent fleet.
-- LICENSE MIT dan atribusi copyright: nama di sana adalah atribusi hukum, bukan prasyarat setup. Tidak menghapus kewajiban mempertahankan notice.
-- API, state machine, nilai default, dan optional artifact/gate dalam CLI: sesuai SPEC. Dokumentasi protokol boleh menganjurkan artifact + gate, tanpa mengklaim CLI mewajibkannya.
-- Tidak menambah dependency runtime, framework agent, process manager, retry webhook, exit API eksternal, cross-host daemon, installer, atau npm publishing: tidak diperlukan untuk koreksi dan beberapa eksplisit di luar scope v1.
-- Angka implementasi historis REPORT dipertahankan, ditandai historis; hasil run ini dilaporkan terpisah. Tidak mengedit registry/live state pengguna.
-- Tidak membuka folder atau konteks di luar repo selain instruksi skill/RTK yang sudah diotorisasi; tidak memakai mailbox atau menghubungi pihak lain. Brief run ini cukup untuk pekerjaan.
+- README logo/header, bundled SVG/PNG, brand colors/geometry: this is not a redesign task. The “NoDeadman Muse” product identity remains; “Muse” as an agent prerequisite has been removed.
+- P1–P6 predictions and pilot status in README: frozen by mandate; not declared passed based on this suite. Origin remains a generic story of a one-person multi-agent fleet.
+- MIT LICENSE and copyright attribution: the name there is legal attribution, not a setup prerequisite. The obligation to retain the notice is not removed.
+- API, state machine, default values, and optional artifact/gate in the CLI: consistent with SPEC. Protocol documentation may recommend artifact + gate, without claiming the CLI requires them.
+- No runtime dependency, agent framework, process manager, webhook retry, external exit API, cross-host daemon, installer, or npm publishing added: unnecessary for the corrections and some explicitly outside v1 scope.
+- Historical REPORT implementation figures preserved, marked as historical; this run's results reported separately. User registry/live state not edited.
+- No folders or context outside the repo opened except the already-authorized skill/RTK instructions; no mailbox used or other parties contacted. This run's brief is sufficient for the work.
 
-## Sisa risiko dan batas verifikasi
+## Remaining risks and verification limits
 
-1. Clone GitHub melalui HTTPS belum dapat dibuktikan dari sandbox akibat DNS; clone lokal bukan pengganti bukti konektivitas publik. Tidak ada commit/push sehingga publik masih memerlukan publikasi hasil koreksi oleh pemilik repo.
-2. POSIX/macOS dan Node 26.8.2 teruji di run ini. Native Windows, WSL, Linux, Node 20/22, process manager, dan agent runtime tertentu belum diuji langsung; dokumen tidak mengklaim matriks platform tersebut lulus.
-3. Registry hanya satu host dengan operator yang saling percaya. PID reuse, zombie process, network filesystem, multi-user permissions, skalabilitas/rotasi history, crash lock, dan power-loss durability tetap batas v1 yang sudah dirinci di REPORT.
-4. Watcher memerlukan proses independen yang tetap hidup. Heartbeat wrapper membuktikan wrapper memberi sinyal, bukan agent membuat kemajuan. No-progress perlu profile; deadline tidak membunuh child/gate. Host mati tidak bisa mengalarm dirinya sendiri.
-5. Webhook hanya satu percobaan best effort; pemulihan channel/host dan transport HTTP nyata tidak dibuktikan oleh tes mock. P4 tetap prediksi, bukan fitur yang dijanjikan.
-6. Artifact/gate opsional dan gate adalah command tepercaya tanpa timeout khusus. Operator perlu memilih pemeriksaan dan melakukan review kualitas. Attach eksternal tidak dapat menuntaskan run secara sukses di v1.
-7. Regenerasi logo penuh tidak dijalankan: font, fontTools, Pillow, dan binary resvg tidak tersedia dalam environment uji ini. Validasi argumen serta sintaks Python diuji; penggunaan `resvg --width WIDTH INPUT OUTPUT` dicocokkan dengan [sumber CLI resmi resvg](https://github.com/linebender/resvg/blob/main/crates/resvg/src/main.rs). Output byte-identik lintas versi font/renderer belum terbukti. Regenerasi harus dilakukan di salinan checkout karena menimpa aset.
+1. GitHub cloning over HTTPS could not be demonstrated from the sandbox due to DNS; a local clone does not replace evidence of public connectivity. No commit/push, so public availability still requires the repo owner to publish the corrections.
+2. POSIX/macOS and Node 26.8.2 were tested in this run. Native Windows, WSL, Linux, Node 20/22, process managers, and particular agent runtimes have not been directly tested; the documents do not claim that platform matrix passed.
+3. The registry is single-host with mutually trusted operators. PID reuse, zombie processes, network filesystems, multi-user permissions, history scaling/rotation, crash locks, and power-loss durability remain v1 limitations already detailed in REPORT.
+4. The watcher requires an independent process that stays alive. Wrapper heartbeat proves the wrapper is signaling, not that the agent is making progress. No-progress requires a profile; deadline does not kill the child/gate. A dead host cannot alarm about itself.
+5. Webhook is a single best-effort attempt; channel/host recovery and real HTTP transport are not demonstrated by mock tests. P4 remains a prediction, not a promised feature.
+6. Artifact/gate are optional and the gate is a trusted command without a dedicated timeout. Operators need to choose checks and perform quality review. External attach cannot successfully complete a run in v1.
+7. Full logo regeneration was not run: fonts, fontTools, Pillow, and the resvg binary were unavailable in this test environment. Argument validation and Python syntax were tested; usage of `resvg --width WIDTH INPUT OUTPUT` was checked against the [official resvg CLI source](https://github.com/linebender/resvg/blob/main/crates/resvg/src/main.rs). Byte-identical output across font/renderer versions has not been demonstrated. Regeneration must be done in a copy of the checkout because it overwrites assets.
 
-Tidak ada blocker teknis di dalam repo yang mencegah kedua suite wajib. Batas network dan tooling grafis di atas dilaporkan apa adanya dan tidak dianggap sebagai bukti sukses yang belum ada.
+There is no technical blocker inside the repo preventing either required suite. The network and graphics tooling limits above are reported as they are and are not treated as evidence of success that has not been established.
