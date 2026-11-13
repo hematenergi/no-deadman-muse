@@ -1,7 +1,4 @@
-<p align="center">
-  <img alt="NoDeadman Muse" src="assets/lockup-light.png#gh-light-mode-only" width="520">
-  <img alt="NoDeadman Muse" src="assets/lockup-dark.png#gh-dark-mode-only" width="520">
-</p>
+# NoDeadman Muse
 
 **No agent run dies silently.**
 
