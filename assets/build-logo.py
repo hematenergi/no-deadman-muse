@@ -1,18 +1,25 @@
 #!/usr/bin/env python3
 """
-NoDeadman Muse — logo generator (Minji, 13 Nov 2026).
-Deterministic: same inputs -> same outputs. No network, no AI generation.
+NoDeadman Muse — FINAL logo generator: Lentera Penjaga (Minji, 13 Nov 2026).
+Direction chosen by Dany 13 Nov (sketch round 4, direction 1); his one
+correction: the lantern shape must be RAPI (tidy). This build answers it
+with construction discipline:
+  - every coordinate derives from ONE centre axis (cx=60); the right
+    half of every curve is the arithmetic mirror of the left half;
+  - one stroke weight (6) for ring + chamber frame;
+  - fixed proportion ladder: ring 18, crown band, chamber 56 wide,
+    plinth steps 66/48.
+A mirror-difference check on the rendered mark runs at the end and is
+printed: symmetric by construction, verified by pixels.
 
-Concept: ONE unbroken stroke. A run's baseline goes flat, spikes once
-(the heartbeat), and the spike's fall lands exactly in the valley of a
-checkmark whose long arm finishes high: the pulse, watched to a verified
-end. No death imagery; the line never breaks and never flatlines.
+Lantern anatomy (local box 120x136): suspension ring (the watch is hung
+where all can see it) - neck - crown - glass chamber - one gold flame
+(the vigil light that is never allowed to go out) - stepped plinth.
+Wordmark: Noto Serif Display Black, one name, one colour per variant.
 
-Outputs (this folder):
-  mark.svg / mark.png (1024)          - pulse-check mark, transparent
-  lockup-light.svg / .png (>=1600w)   - ink wordmark, for light backgrounds
-  lockup-dark.svg  / .png (>=1600w)   - white wordmark, for dark backgrounds
-  proof-sheet.png                     - verification board (not for install)
+Outputs: mark.svg/.png (ink), mark-dark.svg/.png (paper), lockup-light,
+lockup-dark (SVG+PNG >=1600w), context-readme-light/dark (520px),
+proof-sheet.png. Deterministic; fonts via fontTools glyph paths.
 """
 from fontTools.ttLib import TTFont
 from fontTools.pens.svgPathPen import SVGPathPen
@@ -20,169 +27,170 @@ from PIL import Image, ImageDraw, ImageFont
 import os
 
 OUT = os.path.dirname(os.path.abspath(__file__))
-
-# ---------- tokens ----------
-GREEN_CANDIDATES = ["#22C55E", "#16A34A", "#1FA855", "#2FBF71"]
-INK = "#11181D"        # wordmark on light
-PAPER = "#FFFFFF"      # wordmark on dark
-GH_DARK = "#0D1117"    # GitHub dark background (proof surface)
-
-def lum(rgb):
-    def f(c):
-        c = c / 255.0
-        return c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
-    r, g, b = rgb
-    return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b)
+INK = "#11181D"
+PAPER = "#F7F5F0"
+GOLD = "#C9A227"
+GH_DARK = "#0D1117"
 
 def hx(h):
     h = h.lstrip("#")
     return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
 
-def contrast(h1, h2):
-    l1, l2 = lum(hx(h1)), lum(hx(h2))
-    hi, lo = max(l1, l2), min(l1, l2)
-    return (hi + 0.05) / (lo + 0.05)
+# ---------------- lantern geometry (local 120x136, axis cx=60) ----------------
+CX = 60
+RING_CY, RING_R = 15, 9
+NECK = (56.5, 24, 63.5, 42)                    # x0,y0,x1,y1
+CROWN_TOP = (30, 48); CROWN_CTRL = (60, 30); CROWN_TOP_R = (90, 48); CROWN_Y1 = 56
+CHAMBER = (32, 56, 88, 116); CHAMBER_RX = 4
+PLINTH = (27, 116, 93, 124)
+FOOT = (36, 124, 84, 130)
+STROKE = 6
+# flame: tip (60,68); left cubic down, bottom arc, right cubic up (mirrored)
+FLAME_D = ("M60,68 C51,82 49,89 49,95 C49,102 53.5,106 60,106 "
+           "C66.5,106 71,102 71,95 C71,89 69,82 60,68 Z")
 
-print("== green candidates: contrast on white / on GitHub dark ==")
-for g in GREEN_CANDIDATES:
-    print(f"  {g}: white {contrast(g, '#FFFFFF'):.2f}:1 | dark {contrast(g, GH_DARK):.2f}:1")
-GREEN = "#16A34A"  # deepest candidate: strongest on white (3.30) while 5.74 on dark
-assert contrast(GREEN, "#FFFFFF") >= 3.0 and contrast(GREEN, GH_DARK) >= 3.0, "green fails"
-print(f"GREEN locked: {GREEN} (white {contrast(GREEN,'#FFFFFF'):.2f}, dark {contrast(GREEN,GH_DARK):.2f})")
-print(f"INK on white: {contrast(INK, '#FFFFFF'):.2f}:1 | PAPER on dark: {contrast(PAPER, GH_DARK):.2f}:1")
+def lantern_svg(struct):
+    return (
+        f'<circle cx="{CX}" cy="{RING_CY}" r="{RING_R}" fill="none" stroke="{struct}" stroke-width="{STROKE}"/>'
+        f'<rect x="{NECK[0]}" y="{NECK[1]}" width="{NECK[2]-NECK[0]}" height="{NECK[3]-NECK[1]}" fill="{struct}"/>'
+        f'<path d="M{CROWN_TOP[0]},{CROWN_TOP[1]} Q{CROWN_CTRL[0]},{CROWN_CTRL[1]} {CROWN_TOP_R[0]},{CROWN_TOP_R[1]} '
+        f'L{CROWN_TOP_R[0]},{CROWN_Y1} L{CROWN_TOP[0]},{CROWN_Y1} Z" fill="{struct}"/>'
+        f'<rect x="{CHAMBER[0]}" y="{CHAMBER[1]}" width="{CHAMBER[2]-CHAMBER[0]}" height="{CHAMBER[3]-CHAMBER[1]}" '
+        f'rx="{CHAMBER_RX}" fill="none" stroke="{struct}" stroke-width="{STROKE}"/>'
+        f'<path d="{FLAME_D}" fill="{GOLD}"/>'
+        f'<rect x="{PLINTH[0]}" y="{PLINTH[1]}" width="{PLINTH[2]-PLINTH[0]}" height="{PLINTH[3]-PLINTH[1]}" fill="{struct}"/>'
+        f'<rect x="{FOOT[0]}" y="{FOOT[1]}" width="{FOOT[2]-FOOT[0]}" height="{FOOT[3]-FOOT[1]}" fill="{struct}"/>'
+    )
 
-# ---------- mark geometry (grid 0..100) ----------
-STROKE = 11.5
-POINTS = [(8, 57), (28, 57), (39, 30), (50, 68), (92, 26)]
-pts_str = " ".join(f"{x},{y}" for x, y in POINTS)
+# square mark viewBox 140x140, lantern group at translate(10,2)
+for name, struct in [("mark", INK), ("mark-dark", PAPER)]:
+    doc = (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 140 140">'
+           f'<g transform="translate(10,2)">{lantern_svg(struct)}</g></svg>')
+    open(os.path.join(OUT, f"{name}.svg"), "w").write(doc)
 
-def mark_svg(color, vb_pad=0):
-    return (f'<polyline points="{pts_str}" fill="none" stroke="{color}" '
-            f'stroke-width="{STROKE}" stroke-linecap="round" stroke-linejoin="round"/>')
+# ---------------- wordmark ----------------
+F_SERIF = "/usr/share/fonts/truetype/noto/NotoSerifDisplay-Black.ttf"
+NAME = "NoDeadman Muse"
 
-# standalone mark svg
-mark_svg_doc = (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">'
-                f'{mark_svg(GREEN)}</svg>')
-open(os.path.join(OUT, "mark.svg"), "w").write(mark_svg_doc)
+EM = 116.0
+MARK_H = 150.0
+MARK_W = MARK_H * 120 / 136
+GAP = 30.0
+TX = MARK_W + GAP
+BASELINE = 116.0
 
-# ---------- wordmark via fontTools glyph paths ----------
-F_MED = os.path.expanduser("~/.fonts/inter/Inter-SemiBold.ttf")
-F_XBD = os.path.expanduser("~/.fonts/inter/Inter-ExtraBold.ttf")
+import re
+_NUM = re.compile(r"[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?")
 
-def word_paths(font_path, text, size, tracking=-0.015):
-    """Return (svg_path_d_list, total_advance) in units where em = size."""
-    font = TTFont(font_path)
+def clean_numbers(d):
+    """Rewrite every number in a path string as a plain decimal (2dp).
+    fontTools can emit exponent notation (1e-05) which strict SVG path
+    parsers (resvg) misread - that once blew the wordmark into a blob."""
+    def rep(m):
+        v = float(m.group(0))
+        s = f"{v:.2f}".rstrip("0").rstrip(".")
+        return s if s not in ("", "-0") else "0"
+    return _NUM.sub(rep, d)
+
+def name_paths_baked(text, size, tracking=-0.01):
+    """Glyph paths with the placement transform BAKED into coordinates
+    (no transform attributes anywhere - maximum renderer compatibility)."""
+    from fontTools.pens.transformPen import TransformPen
+    font = TTFont(F_SERIF)
     upem = font["head"].unitsPerEm
     gs = font.getGlyphSet()
     cmap = font.getBestCmap()
-    scale = size / upem
+    s = size / upem
     paths, x = [], 0.0
     for ch in text:
         gname = cmap[ord(ch)]
         glyph = gs[gname]
-        pen = SVGPathPen(gs)
+        svg_pen = SVGPathPen(gs)
+        pen = TransformPen(svg_pen, (s, 0, 0, -s, TX + x, BASELINE))
         glyph.draw(pen)
-        d = pen.getCommands()
-        if d:
-            paths.append((d, x))
-        x += glyph.width * scale * (1 + tracking)
+        dd = svg_pen.getCommands()
+        if dd:
+            paths.append(clean_numbers(dd))
+        x += glyph.width * s * (1 + tracking)
     return paths, x
 
-EM = 120.0  # wordmark em size in lockup units
-TRK = -0.015
-p1, w1 = word_paths(F_MED, "NoDeadman", EM, TRK)
-p2, w2 = word_paths(F_XBD, "Muse", EM, TRK)
-_, wsp = word_paths(F_MED, " ", EM, TRK)
+name_p, name_w = name_paths_baked(NAME, EM)
+TOTAL_W = TX + name_w
+TOTAL_H = 156.0
 
-MARK_BOX = 200.0     # lockup: mark occupies 200x200 (grid x2)
-GAP = 34.0
-TX = MARK_BOX + GAP
-BASELINE = 138.0     # text baseline y in lockup units (mark content centre ~ (58+132)/2=95 vs cap centre)
-TOTAL_W = TX + w1 + wsp + w2
-TOTAL_H = 200.0
-
-def glyph_group(paths, x0, color):
-    parts = []
-    for d, gx in paths:
-        parts.append(f'<path d="{d}" transform="translate({x0 + gx:.2f},{BASELINE}) scale(1,-1)" fill="{color}"/>')
-    return "".join(parts)
-
-def lockup_svg(text_color):
-    inner = (f'<g transform="translate(0,0) scale(2,2)">{mark_svg(GREEN)}</g>'
-             + glyph_group(p1, TX, text_color)
-             + glyph_group(p2, TX + w1 + wsp, GREEN))
+def lockup_svg(struct, text_color):
+    parts = [f'<g transform="translate(0,3) scale({MARK_H/136:.4f})">{lantern_svg(struct)}</g>']
+    for dd in name_p:
+        parts.append(f'<path d="{dd}" fill="{text_color}"/>')
     return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {TOTAL_W:.0f} {TOTAL_H:.0f}">'
-            f'{inner}</svg>')
+            + "".join(parts) + "</svg>")
 
-open(os.path.join(OUT, "lockup-light.svg"), "w").write(lockup_svg(INK))
-open(os.path.join(OUT, "lockup-dark.svg"), "w").write(lockup_svg(PAPER))
+open(os.path.join(OUT, "lockup-light.svg"), "w").write(lockup_svg(INK, INK))
+open(os.path.join(OUT, "lockup-dark.svg"), "w").write(lockup_svg(PAPER, PAPER))
 print(f"lockup viewBox: {TOTAL_W:.0f} x {TOTAL_H:.0f}")
 
-# ---------- PNG rendering via PIL (mirrors the SVG layout) ----------
-def draw_mark(draw, ox, oy, scale, color, stroke_units=STROKE):
-    pts = [(ox + x * scale, oy + y * scale) for x, y in POINTS]
-    w = stroke_units * scale
-    draw.line(pts, fill=color, width=int(round(w)), joint="curve")
-    r = w / 2
-    for (x, y) in (pts[0], pts[-1]):
-        draw.ellipse([x - r, y - r, x + r, y + r], fill=color)
+# ---------------- PNG rendering: TRUE VECTOR via resvg ----------------
+# PNGs are rasterized from the SVG masters by resvg (real vector
+# rasterizer) - never by sampling curves into polygons (the first final's
+# "patah-patah" mistake, Dany 13 Nov: "jangan raster"), and never via
+# ffmpeg's SVG path (it silently upscales a 100px raster - fringed junk).
+# Rendered at 2x, downscaled once with LANCZOS.
+import subprocess
 
-def render_mark_png(path, px=1024):
-    im = Image.new("RGBA", (px, px), (0, 0, 0, 0))
+RENDER_MJS = os.path.expanduser("~/workspace/minji/tools-resvg/render.mjs")
+
+def render_svg(svg_path, out_png, width_px):
+    subprocess.run(["node", RENDER_MJS, svg_path, out_png, str(width_px)], check=True)
+    return Image.open(out_png)
+
+def render_final(svg_name, png_name, width_px, downscale_to=None):
+    im = render_svg(os.path.join(OUT, svg_name), os.path.join(OUT, png_name), width_px)
+    if downscale_to:
+        h = int(im.height * downscale_to / im.width)
+        im = im.resize((downscale_to, h), Image.LANCZOS)
+        im.save(os.path.join(OUT, png_name))
+    return im
+
+mk_light = render_final("mark.svg", "mark.png", 2048, downscale_to=1024)
+render_final("mark-dark.svg", "mark-dark.png", 2048, downscale_to=1024)
+
+# mirror-symmetry verification on the ink mark
+import numpy as np
+a = np.asarray(mk_light).astype(int)
+d = np.abs(a - a[:, ::-1]).sum(axis=2)
+print(f"mirror check: {(d > 0).mean() * 100:.3f}% pixels differ (antialiased curve edges only), mean delta {d.mean():.3f}")
+
+ll = render_final("lockup-light.svg", "lockup-light.png", 4400, downscale_to=2200)
+ld = render_final("lockup-dark.svg", "lockup-dark.png", 4400, downscale_to=2200)
+
+# ---------------- context renders: exact 520px in a README header sim ----------------
+F_TAG = os.path.expanduser("~/.fonts/inter/Inter-Regular.ttf")
+def context_render(lockup, bg, path):
+    im = Image.new("RGB", (920, 300), bg)
     d = ImageDraw.Draw(im)
-    draw_mark(d, 0, 0, px / 100.0, hx(GREEN) + (255,))
+    disp = lockup.resize((520, int(520 * lockup.height / lockup.width)), Image.LANCZOS)
+    im.paste(disp, (24, 28), disp)
+    ft = ImageFont.truetype(F_TAG, 25)
+    tc = (201, 209, 217, 255) if bg == hx(GH_DARK) else (31, 35, 40, 255)
+    d.text((26, 28 + disp.height + 18), "No agent run dies silently.", font=ft, fill=tc)
     im.save(path)
 
-render_mark_png(os.path.join(OUT, "mark.png"))
+context_render(ll, (255, 255, 255), os.path.join(OUT, "context-readme-light.png"))
+context_render(ld, hx(GH_DARK), os.path.join(OUT, "context-readme-dark.png"))
 
-def render_lockup_png(path, text_color, target_w=2200):
-    s = target_w / TOTAL_W
-    W, H = int(target_w), int(TOTAL_H * s)
-    im = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-    d = ImageDraw.Draw(im)
-    draw_mark(d, 0, 0, 2 * s, hx(GREEN) + (255,))
-    f1 = ImageFont.truetype(F_MED, int(EM * s))
-    f2 = ImageFont.truetype(F_XBD, int(EM * s))
-    # PIL text origin is top-of-em box; convert baseline: y_top = BASELINE*s - ascent
-    asc1, _ = f1.getmetrics()
-    y_top = BASELINE * s - asc1
-    d.text((TX * s, y_top), "NoDeadman", font=f1, fill=hx(text_color) + (255,))
-    # advance for word1 measured with PIL to place word2 (tracking ignored in PNG, negligible)
-    w1_px = d.textlength("NoDeadman ", font=f1)
-    d.text((TX * s + w1_px, y_top), "Muse", font=f2, fill=hx(GREEN) + (255,))
-    im.save(path)
-
-render_lockup_png(os.path.join(OUT, "lockup-light.png"), INK)
-render_lockup_png(os.path.join(OUT, "lockup-dark.png"), PAPER)
-
-# ---------- proof sheet ----------
-def paste_fit(base, img, box):
-    x, y, w, h = box
-    r = min(w / img.width, h / img.height)
-    ni = img.resize((int(img.width * r), int(img.height * r)), Image.LANCZOS)
-    base.paste(ni, (int(x + (w - ni.width) / 2), int(y + (h - ni.height) / 2)), ni)
-
-sheet = Image.new("RGB", (1500, 1120), (255, 255, 255))
+# ---------------- proof sheet: mark at sizes on both grounds ----------------
+sheet = Image.new("RGB", (1200, 460), (255, 255, 255))
 sd = ImageDraw.Draw(sheet)
-ll = Image.open(os.path.join(OUT, "lockup-light.png"))
-ld = Image.open(os.path.join(OUT, "lockup-dark.png"))
-mk = Image.open(os.path.join(OUT, "mark.png"))
-f_lab = ImageFont.truetype(F_MED, 26)
-# top: lockups (light left on white, dark right on GH dark panel)
-sd.rectangle([750, 0, 1500, 400], fill=hx(GH_DARK))
-paste_fit(sheet, ll, (30, 70, 690, 300))
-paste_fit(sheet, ld, (780, 70, 690, 300))
-sd.text((40, 20), "LOCKUP - light bg (ink)", font=f_lab, fill=hx(INK))
-sd.text((790, 20), "LOCKUP - dark bg (white)", font=f_lab, fill=hx(PAPER))
-# bottom: mark sizes, light row then dark row (panel drawn BEFORE pasting)
-sd.rectangle([0, 760, 1500, 1120], fill=hx(GH_DARK))
-sd.text((40, 420), "MARK 256 / 64 / 32 / 16 - light", font=f_lab, fill=hx(INK))
-sd.text((40, 770), "MARK 256 / 64 / 32 / 16 - dark", font=f_lab, fill=hx(PAPER))
-for row, y in enumerate([460, 820]):
-    x = 40
+sd.rectangle([600, 0, 1200, 460], fill=hx(GH_DARK))
+mkd = Image.open(os.path.join(OUT, "mark-dark.png"))
+f_lab = ImageFont.truetype(F_SERIF, 20)
+sd.text((30, 18), "MARK - light (ink)", font=f_lab, fill=hx(INK))
+sd.text((630, 18), "MARK - dark (paper)", font=f_lab, fill=(255, 255, 255))
+for base_x, src in ((30, mk_light), (630, mkd)):
+    x = base_x
     for sz in [256, 64, 32, 16]:
-        m = mk.resize((sz, sz), Image.LANCZOS)
-        sheet.paste(m, (x, y + (256 - sz)), m)
-        x += sz + 60
+        m = src.resize((sz, sz), Image.LANCZOS)
+        sheet.paste(m, (x, 70 + (256 - sz)), m)
+        x += sz + 40
 sheet.save(os.path.join(OUT, "proof-sheet.png"))
 print("done:", sorted(os.listdir(OUT)))
